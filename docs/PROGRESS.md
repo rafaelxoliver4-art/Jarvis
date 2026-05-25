@@ -11,7 +11,8 @@
 - **Phase:** Phase 0 ✅ done → **Phase 1 — Voice loop** (next)
 - **Next action:** Phase 1 — implement the ElevenLabs voice loop in `main.py` and `pip install` `elevenlabs[pyaudio]` + `python-dotenv` into `./venv`. **Blocked until user finishes the unblock list below.**
 - **Blocked on user:** real `.env` keys + ElevenLabs agent created in the dashboard. See "Next action — Build step" for details.
-- **Last commit:** `f9ef8f8` — 2026-05-24 — `docs(progress): record Phase 0 done + self-improvement north star`.
+- **Last commit:** `4479019` — 2026-05-24 — `docs: make PROGRESS.md a true zero-context handoff + encode the BRIDGE convention`.
+- **Python decision:** rebuild `venv` against Anaconda's 3.12.4 at Phase 1 start (3.13 is currently in the venv but will be replaced).
 - **Repo:** `C:\Users\Rafael\OneDrive\Área de Trabalho\Jarvis\` · branch `main`.
 
 ---
@@ -47,9 +48,10 @@ Paste the **Phase 1 — Voice loop** prompt from `docs/BUILD_GUIDE.md` into Clau
 ---
 
 ## 🔧 Known issues / WIP
-- **Python is 3.13.13 here, not 3.11** (docs assume 3.11+). If `pip install -r requirements.txt` fails in Phase 1, paste the full error — fallback is pinning compatible versions or rebuilding the venv with Python 3.11/3.12.
+- **Jarvis/venv currently points at Python 3.13.13** (Microsoft Store install). At Phase 1 start, the **plan is to rebuild it against Python 3.12.4** (Anaconda at `C:\Users\Rafael\anaconda3\python.exe`) — 3.12 has the widest tested wheel coverage for `pyaudio`, `elevenlabs`, `langchain-community`, and `claude-agent-sdk`. 3.13 *probably* works but is newer than most of those libs' validation matrices.
+- **Available Pythons on this machine** (verified 2026-05-24): 3.12.4 (Anaconda, recommended for Jarvis) and 3.13.13 (MS Store). No 3.11, no `py` launcher, no Visual C++ build tools — if a future package needs to build from source we'll need to install VC build tools.
 - **Git identity is repo-local only** (`rafaelxoliver4@gmail.com` / `Rafael` in `.git/config`), not global. Change inside the Jarvis folder if a different name on commits is preferred.
-- **OneDrive sync** sometimes locks files during heavy operations (venv writes, `pip install`). If you hit a weird file-lock error, pause OneDrive sync for a minute and retry.
+- **OneDrive sync** sometimes locks files during heavy operations (venv writes, `pip install`). If you hit a weird file-lock error, pause OneDrive sync for a minute and retry. Right-click `Jarvis/` → "Always keep on this device" recommended to prevent offloading.
 
 ---
 
@@ -90,6 +92,7 @@ Legend: ✅ done · ⚠️ partial / skeleton only · ❌ missing · ⏳ not sta
 ---
 
 ## 🧠 Decision log (newest first)
+- **2026-05-24** — **Jarvis/venv will be rebuilt against Anaconda's Python 3.12.4** at Phase 1 start. Rafael's machine has 3.12 (Anaconda) and 3.13 (MS Store) only; no 3.11. 3.12 is the safest target — widest tested-wheel coverage across `pyaudio`, `elevenlabs`, `langchain-community`, `claude-agent-sdk` — without installing anything new.
 - **2026-05-24** — **PROGRESS.md is the manual BRIDGE to Rafael's planning chat** and the project's single source of truth. If anything conflicts with this file, the file wins. Convention encoded in `CLAUDE.md` and in Claude Code's user-level memory so it persists across sessions.
 - **2026-05-24** — ⭐ **JARVIS must keep improving itself the more it's used** (user north-star directive). Persistent memory, procedural skills, and post-task self-reflection are load-bearing. Backlog and roadmap re-prioritised accordingly.
 - **2026-05-24** — **`.gitignore` tweaked** from `generated/` → `generated/*` + `!generated/.gitkeep` so the empty sandbox folder is tracked but user output dropped into it isn't.
