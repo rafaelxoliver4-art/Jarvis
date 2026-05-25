@@ -1,0 +1,19 @@
+# Secrets — never commit
+.env
+
+# Python
+venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+# Assistant output and local memory
+generated/*
+!generated/.gitkeep
+memory/*.local
+memory/*.db
+
+# OS / editor
+.DS_Store
+.vscode/
+.idea/

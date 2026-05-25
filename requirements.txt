@@ -1,0 +1,16 @@
+# Core voice loop
+elevenlabs[pyaudio]
+python-dotenv
+
+# Tools
+psutil                 # system info
+langchain-community    # free DuckDuckGo web search
+
+# Reasoning / delegation (Phase 5)
+claude-agent-sdk
+
+# Added in later phases as needed:
+# playwright           # browser control (Phase 4)
+# pillow               # screen vision / image handling (Phase 7)
+# openai               # image generation (optional)
+# chromadb             # semantic memory upgrade (optional)
