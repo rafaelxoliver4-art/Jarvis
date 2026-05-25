@@ -17,7 +17,7 @@
 - **Blocked on user:** real `.env` keys + ElevenLabs agent created in the dashboard. See "Next action — Build step" for details.
 - **Python decision:** rebuild `venv` against Anaconda's 3.12.4 at Phase 1 start (3.13 is currently in the venv but will be replaced).
 - **Repo:** `C:\Users\Rafael\OneDrive\Área de Trabalho\Jarvis\` · branch `main` · run `git log --oneline` for the commit trail.
-- **Open questions blocking acceleration:** 7 strategic decisions queued for the planning chat — see "Open questions" section below.
+- **Open questions:** none — all 7 resolved by the planning chat 2026-05-25 (see Decision log).
 
 ---
 
@@ -55,7 +55,6 @@ Paste the **Phase 1 — Voice loop** prompt from `docs/BUILD_GUIDE.md` into Clau
 
 ## 🔧 Known issues / WIP
 - **🚧 Phase 1 build is BLOCKED** awaiting two human-only actions from Rafael: (1) create the ElevenLabs agent in the dashboard (set its LLM to a Claude model, paste the Jarvis system prompt from `docs/PROMPT_LIBRARY.md` § A), and (2) fill `Jarvis/.env` with the real `ELEVENLABS_API_KEY` + `AGENT_ID` (and `ANTHROPIC_API_KEY` if grabbing it now). Claude Code must NOT start implementing the voice loop before both are confirmed — building without a real agent to connect to would only stall or force guesses.
-- **📨 Incoming from the planning chat:** a decision-log block resolving the 7 open questions (phase reorder, Phase 6.5 scope, memory v1 format, `delegate_task` dashboard-registration timing, tool-log timing, browser approach, wake word). When Rafael pastes it: move the resolved items out of "Open questions" into the Decision log (newest-first), update the roadmap accordingly, then commit.
 - **Jarvis/venv currently points at Python 3.13.13** (Microsoft Store install). At Phase 1 start, the **plan is to rebuild it against Python 3.12.4** (Anaconda at `C:\Users\Rafael\anaconda3\python.exe`) — 3.12 has the widest tested wheel coverage for `pyaudio`, `elevenlabs`, `langchain-community`, and `claude-agent-sdk`. 3.13 *probably* works but is newer than most of those libs' validation matrices.
 - **Available Pythons on this machine** (verified 2026-05-24): 3.12.4 (Anaconda, recommended for Jarvis) and 3.13.13 (MS Store). No 3.11, no `py` launcher, no Visual C++ build tools — if a future package needs to build from source we'll need to install VC build tools.
 - **Git identity is repo-local only** (`rafaelxoliver4@gmail.com` / `Rafael` in `.git/config`), not global. Change inside the Jarvis folder if a different name on commits is preferred.
@@ -82,55 +81,37 @@ Legend: ✅ done · ⚠️ partial / skeleton only · ❌ missing · ⏳ not sta
 
 ---
 
-## 🗺️ Phase roadmap (the build)
+## 🗺️ Phase roadmap (the build — order confirmed 2026-05-25)
+Build order: **`1 → 1.5 → 2 → 3 → 5 → 6 → 6.5 → 4 → 7`**. Compounding-knowledge features (delegation + memory + self-reflection) land before the browser.
+
 - **Phase 0** ✅ Scaffold
 - **Phase 1** ⏭️ Voice loop (no tools) — `main.py` + ElevenLabs Conversation
+- **Phase 1.5** ⭐ **Tool-usage log** — `logs/usage_log.jsonl` + a `wrap_log()` helper every tool wraps with (timestamp, tool name, short param summary, outcome, duration). **Secrets-safe** — never log `.env` values or sensitive params. Done before Phase 2 so every real tool is logged from birth, giving Phase 6.5 full telemetry to learn from.
 - **Phase 2** First real tool: `open_application` (learn the pattern)
 - **Phase 3** Core tools: `search_web`, `save_file`, `create_html_file`, `get_system_info`, `control_window`
-- **Phase 4** Browser control: `browse(task)` via Playwright/MCP
-- **Phase 5** ⭐ Reasoning & delegation: `delegate_task` via Claude Agent SDK
-- **Phase 6** ⭐ Persistent memory: `remember`/`recall`, loaded at session start
-- **NEW Phase 6.5** ⭐ **Self-improvement loop:** after every `delegate_task`, write a structured "what worked / what didn't / what I learned" note into `memory/`; future delegations include the relevant notes in the system prompt. **This is the feature that delivers the north star.**
-- **Phase 7** Polish: wake word, screen vision, startup launch, tool log, tool router
+- **Phase 5** ⭐ Reasoning & delegation: `delegate_task` via Claude Agent SDK. Uses the SDK's built-in web search + file tools, so it's useful even before our `browse` tool exists; `browse` plugs into its allow-list later.
+- **Phase 6** ⭐ Persistent memory: `remember`/`recall`, loaded at session start. **v1 store format = JSON Lines** (append-only `.jsonl`, one record per line, each tagged `type` = `"fact"` | `"reflection"`). Clean upgrade path to a Chroma vector store later.
+- **Phase 6.5** ⭐ **Self-improvement loop** (procedural memory only — NOT runtime self-modification): after every `delegate_task`, write a structured reflection note; future delegations include relevant notes in the system prompt. Reflection-note schema (refinable at the phase): `{date (ISO 8601), tags[] (for retrieval), goal (one sentence), tools_used[], outcome (succeeded|partial|failed), what_helped, what_to_avoid, advice_for_future_self}`. **The feature that delivers the north star.**
+- **Phase 4** Browser control: `browse(task)` — **provisional** lean toward Playwright (full control, mature, no third-party-MCP dependency); **re-validate at phase start** since the browser-automation landscape moves fast.
+- **Phase 7** Polish: **push-to-talk first** (wake word deferred; if added later, lean OpenWakeWord over Porcupine), screen vision, startup launch, tool router
 
 ⭐ = directly serves the "JARVIS improves itself the more we use it" directive.
-
-> **Suggested order tweak (logged 2026-05-24):** the original build guide does Phase 4 (browser) before Phase 5 (delegation) and Phase 6 (memory). For Rafael's north-star goal, we'd flip that — `1 → 2 → 3 → 5 → 6 → 6.5 → 4 → 7` — so the compounding-knowledge features land before the one-shot capability bumps. Awaiting Rafael's call from the planning chat.
 
 ---
 
 ## ❓ Open questions for the planning chat
-These are queued for Rafael's planning chat to decide. When a question is answered, move it to the Decision log (newest-first) with the date and rationale. **Phase 1 is not actually blocked by these** — they only need to be answered before the phases they affect.
-
-1. **Phase order.** Original brief: `1 → 2 → 3 → 4 → 5 → 6 → 7`. Claude Code suggests `1 → 2 → 3 → 5 → 6 → 6.5 → 4 → 7` so the compounding-knowledge features (delegation + memory + self-reflection) land before the browser. **Confirm or reject.** *Affects: phase ordering from Phase 4 onward.*
-
-2. **Phase 6.5 self-reflection schema.** After every `delegate_task`, JARVIS writes a structured note into `memory/` that future delegations include in their system prompt. **What fields should the note carry?** Strawman to react to:
-   ```json
-   {
-     "date": "ISO 8601",
-     "goal": "user's original ask, one sentence",
-     "plan_summary": "what JARVIS decided to do",
-     "tools_used": ["list", "of", "tool", "names"],
-     "outcome": "succeeded | partial | failed",
-     "surprises_or_errors": "anything unexpected — short",
-     "advice_for_future_self": "1-2 sentences future-JARVIS should see when tackling similar goals"
-   }
-   ```
-   This is the load-bearing format for the north star. Worth careful thought. *Affects: Phase 6.5.*
-
-3. **Memory v1 file format** (Phase 6). JSON-lines? Single JSON dict? Markdown notes with YAML frontmatter (Obsidian-style — Rafael already lives in Obsidian, so this could double as wiki content)? Eventually a Chroma vector store, but v1 picks one. *Affects: Phase 6.*
-
-4. **`delegate_task` dashboard registration timing.** It's a stub now (returns "I can't do that yet"). Register in the ElevenLabs dashboard now so Jarvis can apologise gracefully on multi-step asks, or wait until Phase 5 so Jarvis never tries to call it? *Affects: dashboard config, behaviour on first multi-step request.*
-
-5. **Pre-Phase-2 tool log detour.** ~5-min addition: `logs/usage_log.jsonl` + a `wrap_log()` helper every tool wraps with. Records every tool call from day one, so when we hit Phase 6.5 we already have months of telemetry to learn from. **Add between Phase 1 and Phase 2, or defer to Phase 7?** Strong case for adding now — retrofitting later is more work and we lose all historical telemetry. *Affects: Phase 1.5 (new) vs. Phase 7.*
-
-6. **Browser control approach** (Phase 4). Playwright (we control fully, more code) vs. an MCP browser server (less code, less control, depends on a third party). Lock in before Phase 4 so we don't burn a session researching. *Affects: Phase 4.*
-
-7. **Wake word** (Phase 7). Porcupine (commercial), OpenWakeWord (open source), or skip entirely and use push-to-talk? *Affects: Phase 7.*
+None currently — all resolved (see Decision log).
 
 ---
 
 ## 🧠 Decision log (newest first)
+- **2026-05-25** — **Build order confirmed (Q1):** 1 → 1.5 → 2 → 3 → 5 → 6 → 6.5 → 4 → 7. Compounding-knowledge features (delegation, memory, self-reflection) land before the browser. Safe because delegate_task uses the Claude Agent SDK's built-in web search + file tools, so it's useful without our browse tool; browse plugs into its allow-list later.
+- **2026-05-25** — **Tool-usage log = new Phase 1.5 (Q5):** right after the voice loop works, before the first real tool. Minimal logs/usage_log.jsonl + a wrap_log() helper every tool wraps with (timestamp, tool name, short param summary, outcome, duration). MUST be secrets-safe — never log .env values or sensitive params. Done before Phase 2 so every tool is logged from birth and Phase 6.5 has full telemetry; not before Phase 1 (no tools to log yet — prove the pipeline first).
+- **2026-05-25** — **delegate_task stays UNREGISTERED in the dashboard until Phase 5 (Q4).** Registering a stub would make the agent call a dead tool; let it reason conversationally instead. Register only when it actually works.
+- **2026-05-25** — **Phase 6.5 scoped to procedural memory only, NOT runtime self-modification (Q2).** JARVIS writes post-task reflection notes future runs read; it does NOT edit its own code/tools live (that stays a supervised Claude Code task Rafael approves). Reflection-note schema (refinable at Phase 6.5): {date (ISO 8601), tags[] (for retrieval), goal (one sentence), tools_used[], outcome (succeeded|partial|failed), what_helped, what_to_avoid, advice_for_future_self}. Added tags vs the strawman so recall can fetch relevant notes by task type.
+- **2026-05-25** — **Memory v1 format = JSON Lines (Q3).** Append-only .jsonl, one record per line, each tagged type ("fact" | "reflection"). Simplest robust option, trivial to append/parse, clean upgrade path to a Chroma vector store. Obsidian/markdown dual-use deferred to a later "export memory to markdown" tool rather than making the primary store markdown.
+- **2026-05-25** — **Browser approach = PROVISIONAL lean Playwright, finalize at Phase 4 (Q6).** Full control, mature, no third-party-MCP dependency, composes into delegate_task's allow-list. Marked provisional — re-run a fresh research pass at Phase 4 since the browser-automation/MCP landscape moves fast.
+- **2026-05-25** — **Wake word deferred; start with push-to-talk (Q7).** Always-on wake word adds false-triggers and complexity for marginal early benefit. If added later, lean OpenWakeWord (open source) over Porcupine (commercial). Low-priority Phase 7.
 - **2026-05-24** — **Jarvis/venv will be rebuilt against Anaconda's Python 3.12.4** at Phase 1 start. Rafael's machine has 3.12 (Anaconda) and 3.13 (MS Store) only; no 3.11. 3.12 is the safest target — widest tested-wheel coverage across `pyaudio`, `elevenlabs`, `langchain-community`, `claude-agent-sdk` — without installing anything new.
 - **2026-05-24** — **PROGRESS.md is the manual BRIDGE to Rafael's planning chat** and the project's single source of truth. If anything conflicts with this file, the file wins. Convention encoded in `CLAUDE.md` and in Claude Code's user-level memory so it persists across sessions.
 - **2026-05-24** — ⭐ **JARVIS must keep improving itself the more it's used** (user north-star directive). Persistent memory, procedural skills, and post-task self-reflection are load-bearing. Backlog and roadmap re-prioritised accordingly.
@@ -146,8 +127,7 @@ These are queued for Rafael's planning chat to decide. When a question is answer
 ## 💡 Backlog (not scheduled yet)
 - **Self-improvement features (highest priority, flows from the north star):**
   - Skill library — capture repeatable recipes ("my morning standup prep") JARVIS can replay and refine.
-  - Tool usage log — track which tools fire and outcomes; surface unused/broken tools for review.
-  - Vector-store semantic memory upgrade from JSON (Chroma or similar).
+  - Vector-store semantic memory upgrade from JSON Lines (Chroma or similar) — the Phase 6 v1 format is `.jsonl` with a clean upgrade path here.
 - Calendar + email (draft-only) via APIs or MCP servers.
 - Multi-agent orchestration (specialised research / email / calendar sub-agents under one Jarvis).
 - Proactive / scheduled tasks (morning briefing, reminders, background work overnight).
