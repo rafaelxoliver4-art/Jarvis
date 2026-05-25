@@ -11,9 +11,9 @@
 - **Phase:** Phase 0 ✅ done → **Phase 1 — Voice loop** (next)
 - **Next action:** Phase 1 — implement the ElevenLabs voice loop in `main.py` and `pip install` `elevenlabs[pyaudio]` + `python-dotenv` into `./venv`. **Blocked until user finishes the unblock list below.**
 - **Blocked on user:** real `.env` keys + ElevenLabs agent created in the dashboard. See "Next action — Build step" for details.
-- **Last commit:** `4479019` — 2026-05-24 — `docs: make PROGRESS.md a true zero-context handoff + encode the BRIDGE convention`.
 - **Python decision:** rebuild `venv` against Anaconda's 3.12.4 at Phase 1 start (3.13 is currently in the venv but will be replaced).
-- **Repo:** `C:\Users\Rafael\OneDrive\Área de Trabalho\Jarvis\` · branch `main`.
+- **Repo:** `C:\Users\Rafael\OneDrive\Área de Trabalho\Jarvis\` · branch `main` · run `git log --oneline` for the commit trail.
+- **Open questions blocking acceleration:** 7 strategic decisions queued for the planning chat — see "Open questions" section below.
 
 ---
 
@@ -43,7 +43,9 @@ Paste the **Phase 1 — Voice loop** prompt from `docs/BUILD_GUIDE.md` into Clau
 ---
 
 ## ✅ Done
-- **2026-05-24 — Phase 0 — Scaffold.** Project scaffolded at `C:\Users\Rafael\OneDrive\Área de Trabalho\Jarvis\` via the kickoff's alternative path (unzipped + flattened `starter/` → root). Python 3.13.13 `venv` created at `./venv` (no packages installed yet, per brief). `.env` populated with placeholders only — Rafael fills real keys. Two commits on `main`: `fae22be` (initial scaffold) and `f9ef8f8` (this PROGRESS.md update + north-star directive logged).
+- **2026-05-24 — Phase 0 — Scaffold.** Project scaffolded at `C:\Users\Rafael\OneDrive\Área de Trabalho\Jarvis\` via the kickoff's alternative path (unzipped + flattened `starter/` → root). Python 3.13.13 `venv` created at `./venv` (no packages installed yet, per brief — will be rebuilt against 3.12 at Phase 1 start). `.env` populated with placeholders only — Rafael fills real keys.
+- **2026-05-24 — Bridge convention encoded** in `CLAUDE.md` so future Claude Code sessions automatically inherit it (PROGRESS.md is single source of truth; file wins on conflicts; lean + scannable for zero-context readers; mandatory end-of-session ritual).
+- **2026-05-24 — Python environment scan** completed: confirmed 3.12.4 (Anaconda) and 3.13.13 (Store) are the only Pythons available. No 3.11. Anaconda's interpreter is the chosen target for `venv`.
 
 ---
 
@@ -88,6 +90,37 @@ Legend: ✅ done · ⚠️ partial / skeleton only · ❌ missing · ⏳ not sta
 ⭐ = directly serves the "JARVIS improves itself the more we use it" directive.
 
 > **Suggested order tweak (logged 2026-05-24):** the original build guide does Phase 4 (browser) before Phase 5 (delegation) and Phase 6 (memory). For Rafael's north-star goal, we'd flip that — `1 → 2 → 3 → 5 → 6 → 6.5 → 4 → 7` — so the compounding-knowledge features land before the one-shot capability bumps. Awaiting Rafael's call from the planning chat.
+
+---
+
+## ❓ Open questions for the planning chat
+These are queued for Rafael's planning chat to decide. When a question is answered, move it to the Decision log (newest-first) with the date and rationale. **Phase 1 is not actually blocked by these** — they only need to be answered before the phases they affect.
+
+1. **Phase order.** Original brief: `1 → 2 → 3 → 4 → 5 → 6 → 7`. Claude Code suggests `1 → 2 → 3 → 5 → 6 → 6.5 → 4 → 7` so the compounding-knowledge features (delegation + memory + self-reflection) land before the browser. **Confirm or reject.** *Affects: phase ordering from Phase 4 onward.*
+
+2. **Phase 6.5 self-reflection schema.** After every `delegate_task`, JARVIS writes a structured note into `memory/` that future delegations include in their system prompt. **What fields should the note carry?** Strawman to react to:
+   ```json
+   {
+     "date": "ISO 8601",
+     "goal": "user's original ask, one sentence",
+     "plan_summary": "what JARVIS decided to do",
+     "tools_used": ["list", "of", "tool", "names"],
+     "outcome": "succeeded | partial | failed",
+     "surprises_or_errors": "anything unexpected — short",
+     "advice_for_future_self": "1-2 sentences future-JARVIS should see when tackling similar goals"
+   }
+   ```
+   This is the load-bearing format for the north star. Worth careful thought. *Affects: Phase 6.5.*
+
+3. **Memory v1 file format** (Phase 6). JSON-lines? Single JSON dict? Markdown notes with YAML frontmatter (Obsidian-style — Rafael already lives in Obsidian, so this could double as wiki content)? Eventually a Chroma vector store, but v1 picks one. *Affects: Phase 6.*
+
+4. **`delegate_task` dashboard registration timing.** It's a stub now (returns "I can't do that yet"). Register in the ElevenLabs dashboard now so Jarvis can apologise gracefully on multi-step asks, or wait until Phase 5 so Jarvis never tries to call it? *Affects: dashboard config, behaviour on first multi-step request.*
+
+5. **Pre-Phase-2 tool log detour.** ~5-min addition: `logs/usage_log.jsonl` + a `wrap_log()` helper every tool wraps with. Records every tool call from day one, so when we hit Phase 6.5 we already have months of telemetry to learn from. **Add between Phase 1 and Phase 2, or defer to Phase 7?** Strong case for adding now — retrofitting later is more work and we lose all historical telemetry. *Affects: Phase 1.5 (new) vs. Phase 7.*
+
+6. **Browser control approach** (Phase 4). Playwright (we control fully, more code) vs. an MCP browser server (less code, less control, depends on a third party). Lock in before Phase 4 so we don't burn a session researching. *Affects: Phase 4.*
+
+7. **Wake word** (Phase 7). Porcupine (commercial), OpenWakeWord (open source), or skip entirely and use push-to-talk? *Affects: Phase 7.*
 
 ---
 
