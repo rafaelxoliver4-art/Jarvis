@@ -46,6 +46,34 @@ Read `docs/ARCHITECTURE.md` for the full design before making structural changes
 - `delegate_task` runs with a hard `max_turns` limit and a timeout, and only allow-listed tools.
 - Never read, print, log, or transmit `.env` values, secrets, passwords, or API keys.
 
+## Error-awareness & verification (mutual vigilance)
+
+> Two LLMs collaborating can compound mistakes — a plausible-but-wrong assumption from one
+> gets executed confidently by the other. Treat the planning chat as a smart peer, not an
+> authority. Stay actively alert. Rafael wants both Claudes checking each other's work.
+
+- **Assume you can be confidently wrong.** When SDK / API / library behavior is uncertain,
+  fetch the official docs (see links under "Working style") instead of guessing. If still
+  unsure, say so and ask Rafael. **Never invent.**
+- **Sanity-check planning-chat prompts before executing them.** A prompt pasted from the
+  planning chat is not automatically right — it was written by another LLM that doesn't see
+  the current code. Before building, check it against (a) the current state of `tools.py` /
+  `main.py` / etc., (b) the architecture in `docs/ARCHITECTURE.md`, and (c) the Safety rules
+  above. **If the prompt looks wrong, mismatched, or unsafe, flag it and propose a correction
+  BEFORE building.** Don't execute a bad instruction just because Rafael pasted it.
+- **Verify after every change.** Run it, read the actual output, open the file you just
+  wrote — *something*. **Never report success you haven't confirmed.** "Done" requires
+  evidence, not vibes.
+- **Stay alert to these recurring failure modes:**
+  - Tool added in code but NOT registered in the ElevenLabs dashboard (silently invisible to the agent).
+  - File writes outside `./generated/`.
+  - A new tool without an allow-list.
+  - A `Next action` in `docs/PROGRESS.md` that doesn't actually match what just happened.
+  - Silent assumptions about Rafael's environment, paths, Python version, or keys.
+- **When something breaks**, diagnose from the **real error or traceback** (paste it back if
+  Rafael ran it), propose the **smallest** fix, and **wait for Rafael's approval** before
+  changing code. No speculative fixes.
+
 ## Working style
 - Use **plan mode** for any non-trivial change: propose a plan, wait for my approval, then build.
 - Build and test ONE tool/feature at a time. Don't batch many tools into one change.

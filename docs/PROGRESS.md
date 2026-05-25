@@ -5,6 +5,8 @@
 > conflicts with this file, the file wins.** Keep it lean, scannable, and self-contained — a
 > fresh reader with zero other context must be able to act on it instantly.
 
+> **Mutual vigilance:** both Claudes stay alert to each other's possible mistakes; nothing is "done" until verified. Full rules in `CLAUDE.md` § "Error-awareness & verification".
+
 ---
 
 ## ⚡ TL;DR — paste-ready status
