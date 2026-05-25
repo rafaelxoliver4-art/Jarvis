@@ -7,6 +7,8 @@
 
 > **Mutual vigilance:** both Claudes stay alert to each other's possible mistakes; nothing is "done" until verified. Full rules in `CLAUDE.md` § "Error-awareness & verification".
 
+> **Full operating model (who does what) lives in `CLAUDE.md` → "Operating model".**
+
 ---
 
 ## ⚡ TL;DR — paste-ready status
