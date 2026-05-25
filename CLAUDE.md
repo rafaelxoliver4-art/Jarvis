@@ -1,8 +1,11 @@
 # Project: JARVIS — personal voice assistant
 
 > This file is your foundational memory. You (Claude Code) read it at the start of every
-> session. Keep it lean (~150 lines). Detailed material lives in `docs/`. **At the start of
-> every session, also read `docs/PROGRESS.md` to see where we are.**
+> session. Keep it lean (~150 lines). Detailed material lives in `docs/`.
+>
+> **At the start of every session, read `docs/PROGRESS.md` — it is the single source of truth
+> and the bridge to Rafael's separate planning chat. If anything conflicts with it, the file
+> wins.** See the "MANDATORY session ritual" section below.
 
 ## What this is
 A voice assistant. **ElevenLabs Agents** handles speech-to-text, text-to-speech, turn-taking,
@@ -52,17 +55,28 @@ Read `docs/ARCHITECTURE.md` for the full design before making structural changes
 - `git commit` after every working tool/feature, with a clear message.
 
 ## ⭐ MANDATORY session ritual (this is what keeps us in sync)
-At the START of every session:
-1. Read this file, then `docs/PROGRESS.md`. State what phase we're in and the next action.
 
-At the END of every session (REQUIRED — not optional):
+> **`docs/PROGRESS.md` is the BRIDGE** between you (Claude Code) and a SEPARATE planning chat
+> Rafael runs on Claude.ai. He cannot connect us directly — he manually carries `PROGRESS.md`
+> between us. It is the **single source of truth** for this project. **If anything ever conflicts
+> with `PROGRESS.md`, the file wins.** Keeping it accurate, clear, and genuinely useful for a
+> zero-context reader is one of your most important jobs.
+
+At the START of every session:
+1. Read this file, then `docs/PROGRESS.md`. State the current phase and the single Next action
+   before doing anything else.
+
+At the END of every session (REQUIRED — not optional; if `PROGRESS.md` doesn't faithfully reflect
+what just happened, treat it as a failure):
 2. Update `docs/PROGRESS.md`:
-   - Move finished items to "Done", note the date.
-   - Write the single clear "Next action" so the next session starts instantly.
-   - Log any decisions made and why (the "Decision log" section).
-   - Note anything that broke or is half-finished under "Known issues / WIP".
-3. If we added a tool, confirm whether it's been registered in the ElevenLabs dashboard yet.
-4. Commit everything.
+   - Move finished items to "Done", note today's date.
+   - Write the single clear "Next action" — self-contained, so a fresh reader can act on it.
+   - Log decisions made and why (Decision log, newest first).
+   - Note anything broken or half-finished under "Known issues / WIP".
+   - Update the Tools table including **ElevenLabs dashboard** registration status — a tool
+     that's in code but not in the dashboard is invisible to the agent; that gap must be visible.
+   - If you notice a recurring gap, **improve the file's structure** too. You have full latitude.
+3. Commit everything with a clear message.
 
 ## How to run
 - Activate venv → ensure `.env` is filled → `python main.py` → talk to the agent → Ctrl+C to stop.
