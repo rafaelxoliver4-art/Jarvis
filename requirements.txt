@@ -1,6 +1,6 @@
-# Core voice loop
-elevenlabs[pyaudio]
-python-dotenv
+# Core voice loop (Phase 1 — installed 2026-05-25 against Python 3.12.4)
+elevenlabs[pyaudio]==2.49.0
+python-dotenv==1.2.2
 
 # Tools
 psutil                 # system info
