@@ -12,9 +12,9 @@
 ---
 
 ## ⚡ TL;DR — paste-ready status
-- **Phase:** Phase 0 ✅ · Phase 1 ✅ (voice loop verified live 2026-05-25) · **Phase 1.5 — Tool-usage log** ⏭️ (next)
-- **Next action:** **Phase 1.5 — Tool-usage log.** Build `Jarvis/logs/usage_log.jsonl` + a `wrap_log()` helper every client tool wraps with: each call records timestamp (ISO 8601), tool name, short param summary, outcome (success/error), and duration. **MUST be secrets-safe** — never log `.env` values or sensitive params. Done before Phase 2 so every real tool is logged from birth, giving Phase 6.5's self-improvement loop full telemetry. No dashboard work required for this phase.
-- **Blocked on:** nothing. Phase 1.5 is internal-only (no external services, no dashboard, no keys). Ready to start when Rafael says go.
+- **Phase:** Phase 0 ✅ · Phase 1 ✅ · Phase 1.5 ✅ (tool-usage log infrastructure committed 2026-05-25 in `bbf74ed`) · **Phase 2 — `open_application`** ⏭️ (next)
+- **Next action:** **Phase 2 — `open_application`.** First real client-tool round-trip. Code skeleton already exists in `tools.py` (allow-list: chrome, vscode, calculator, notes, spotify) and is now wrapped with `wrap_log()`. Phase 2 is essentially **dashboard registration + voice test**: Rafael registers the tool in the ElevenLabs dashboard with matching name + description + `app_name` param; Claude Code then orchestrates a voice test ("Jarvis, open Calculator") to verify the end-to-end round-trip (agent → tool call → app opens → log line written → Jarvis acknowledges).
+- **Blocked on:** Rafael registering `open_application` in the ElevenLabs dashboard (matching name, description, single `app_name` string param). See Next action section for the exact registration text.
 - **Python decision:** ✅ venv on Anaconda Python 3.12.4. `elevenlabs==2.49.0`, `python-dotenv==1.2.2`, `PyAudio==0.2.14` installed and pinned in `requirements.txt`.
 - **Repo:** `C:\Users\Rafael\OneDrive\Área de Trabalho\Jarvis\` · branch `main` · run `git log --oneline` for the commit trail.
 - **Open questions:** none — all 7 resolved by the planning chat 2026-05-25 (see Decision log).
@@ -30,31 +30,38 @@ A voice-controlled agentic personal assistant that runs on Rafael's Windows mach
 
 ## ⏭️ Next action
 
-**Phase 1.5 — Tool-usage log.** A minimal append-only telemetry layer that wraps every client tool we add from Phase 2 onward. Built before any real tool exists so we never have to retrofit.
+**Phase 2 — `open_application`.** First real end-to-end tool round-trip. Establishes the muscle-memory pattern (write → register in code → **register in dashboard** → test by voice → commit). All the code already exists; this phase is mostly about dashboard wiring + a live test.
 
-### What Claude Code does next
-1. Create `Jarvis/logs/` directory with a `.gitkeep` (so the empty folder is tracked but logs themselves are git-ignored — add `logs/*.jsonl` to `.gitignore`).
-2. Add a `wrap_log()` helper to `tools.py` (or a new `tool_logging.py` if it stays cleaner). The helper takes a tool function and returns a wrapped version that:
-   - Records start time (ISO 8601 UTC).
-   - Calls the underlying tool.
-   - Records end time + duration in ms.
-   - Records tool name, outcome (`"ok"` | `"error"`), error message if any.
-   - Records a **short, secrets-safe param summary** (truncated, with `.env`-style values redacted).
-   - Appends one JSON object per call to `logs/usage_log.jsonl`.
-3. Wrap the three existing tool skeletons (`open_application`, `save_file`, `delegate_task`) with `wrap_log()` at registration time. They don't fire yet (nothing in the dashboard), but the wiring is ready for Phase 2.
-4. Unit-style smoke test: call one wrapped tool directly with a fake params dict, verify a record appears in `logs/usage_log.jsonl` with the expected fields and **no secrets**.
-5. Commit. Update PROGRESS.md: move Phase 1.5 → Done, set Next action = Phase 2 (`open_application` first real tool + dashboard registration).
+### What Rafael does next (UNBLOCK for Phase 2)
+Register the tool in the ElevenLabs dashboard. Open the Jarvis agent → **Client Tools** section → **Add tool** → fill in:
 
-### Rafael's role this phase
-Mostly hands-off. You may be asked to **approve the secrets-redaction strategy** (e.g. "for any param key containing 'token', 'key', 'password', store `<redacted>` instead of the value") before I lock it in. You can also keep working in the planning chat in parallel — Phase 1.5 doesn't need external services or dashboard changes, so the next handoff back from the planning chat (probably for Phase 2's `open_application` dashboard registration) doesn't gate this work.
+| Field | Value |
+|---|---|
+| **Name** | `open_application` (exact — must match the registered name in `tools.py`) |
+| **Description** | `Open a desktop application the user names. Allow-listed apps only.` |
+| **Parameter** | name = `app_name`, type = `string`, description = `Friendly name of the app to open (e.g., "chrome", "calculator", "spotify").`, required = yes |
 
-### Reminders for Phase 2 (not now, but flagging)
-- ✅ Agent is **private / auth-enabled as of 2026-05-25** (Rafael flipped it after Phase 1 verified). No further dashboard auth work needed for Phase 2.
-- Register `open_application` in the dashboard at Phase 2 start (matching name + description + `app_name` param).
+Save the agent. The allow-list in `tools.py` currently accepts: `chrome`, `vscode`, `calculator`, `notes`, `spotify`. Anything outside the list returns a polite refusal — safe by design.
+
+### What Claude Code does next (after Rafael confirms registration is saved)
+1. Orchestrate a 30-second live voice test (same pattern as Phase 1: `python -u` launch, background timer, log-capture). Rafael says something like *"Jarvis, open Calculator"*. Verify (via log + on-screen):
+   - `callback_user_transcript` fires with the request.
+   - Agent calls `open_application(app_name="calculator")`.
+   - `wrap_log()` writes a record to `logs/usage_log.jsonl` (outcome=`ok`, tool=`open_application`, params.app_name=`calculator`).
+   - Calculator actually opens on Rafael's desktop.
+   - Agent replies in voice acknowledging the action ("Opening calculator, sir.").
+2. If verified end-to-end: update `PROGRESS.md` → Phase 2 ✅; flip `open_application`'s dashboard column in the Tools table to ✅; set Next action = Phase 3 (next batch of core tools: `search_web`, `save_file`, `create_html_file`, `get_system_info`, `control_window`).
+3. Commit.
+
+### Things to flag during the Phase 2 test
+- If the tool fires but Calculator doesn't open: it's a Windows app-launch issue (we're using `subprocess.Popen("calc", shell=True)` on Windows). Diagnose from the wrapped log line (should still show `outcome=ok` since the subprocess starts fine, but if the OS-side launch fails we may need to revisit the allow-list value).
+- If `callback_user_transcript` fires but the agent doesn't call the tool: dashboard description mismatch or LLM not "seeing" the tool. Tweak the description.
+- If the tool fires but `outcome=error` in the log: real bug in `open_application` — diagnose from the traceback the wrapper captured.
 
 ---
 
 ## ✅ Done
+- **2026-05-25 — Phase 1.5 — Tool-usage log ✅ COMPLETE** (commit `bbf74ed`). New `tool_logging.py` module exporting `wrap_log(tool_fn)`. Every client-tool call now appends one JSON object to `logs/usage_log.jsonl` with `ts_start`, `ts_end`, `duration_ms`, `tool`, `outcome` (`"ok"`|`"error"`), redacted `params`, and `error` (only on failure). **Thread-safe** via a module-level `threading.Lock()`. **Fail-open**: any logging-path exception is swallowed and the underlying tool's result (or exception) is still preserved. **Secrets-safe**: top-level param keys whose name (case-insensitive) contains any of `key, token, secret, password, passwd, api, auth, credential` are stored as `"<redacted>"`; non-sensitive values are truncated to 80 chars. Tool return values are NOT logged (privacy). The three existing skeleton tools (`open_application`, `save_file`, `delegate_task`) are wrapped at registration time in `tools.py`; the function definitions themselves are unchanged. Smoke-tested with a temp script (deleted after run): 7/7 assertions passed — happy-path with `api_key` redacted, forced `ValueError` re-raised intact (fail-open contract), errors logged with `outcome=error`. `logs/.gitkeep` tracks the folder; `logs/*.jsonl` is git-ignored so telemetry never gets committed.
 - **2026-05-25 — Phase 1 — Voice loop ✅ COMPLETE.** Live audio test confirmed end-to-end working via **one** orchestrated run (Rafael did NOT separately run `python main.py` himself this session — the orchestrated test is the only live verification). Rafael first swapped the dashboard voice from IVC to a preset (resolving the earlier WebSocket `1002` error). Claude Code then orchestrated the live test: launched `main.py` via `python -u` (unbuffered stdout) with stdout/stderr redirected to log files, auto-terminated after 30 seconds. During that window Rafael spoke into his mic and listened to his speakers (his hardware, his Windows audio devices). Verified live: agent connects, plays first message "Good day, sir. How can I help?", transcribes Rafael's speech ("Hello Jarvis, can you hear me clearly?" → "What can you do for me right now?"), Claude responds in character ("Loud and clear, sir." / "I can help you open apps, files, or websites..."), TTS plays through speakers, callbacks (`callback_agent_response`, `callback_user_transcript`, `callback_agent_response_correction`) all fire, process exits cleanly with **zero stderr errors**. Phase 1 code path is proven; the `client_tools` wiring (empty registry) is in place ready for Phase 2.
 - **2026-05-25 — Phase 1 build mechanics:** venv rebuilt 3.13.13 → Anaconda 3.12.4; `elevenlabs==2.49.0` + `python-dotenv==1.2.2` + `PyAudio==0.2.14` installed via prebuilt cp312 wheels (no Visual C++ Build Tools needed); `requirements.txt` pinned. SDK API verified against live `conversation.py` source on GitHub (`client_tools=` kwarg + `ClientTools` class + callbacks unchanged); no `main.py` edits needed. `tools.py` confirmed side-effect-light at import.
 - **2026-05-24 — Phase 0 — Scaffold.** Project scaffolded at `C:\Users\Rafael\OneDrive\Área de Trabalho\Jarvis\` via the kickoff's alternative path (unzipped + flattened `starter/` → root). Python 3.13.13 `venv` created at `./venv` (no packages installed yet, per brief — will be rebuilt against 3.12 at Phase 1 start). `.env` populated with placeholders only — Rafael fills real keys.
@@ -73,13 +80,13 @@ Mostly hands-off. You may be asked to **approve the secrets-redaction strategy**
 ---
 
 ## 🧩 Tools — code & dashboard registration
-A tool registered in code but NOT in the ElevenLabs dashboard is invisible to the agent. Both columns must be ✅ for a tool to actually work.
+A tool registered in code but NOT in the ElevenLabs dashboard is invisible to the agent. Both columns must be ✅ for a tool to actually work. **As of Phase 1.5, every registered tool is wrapped with `wrap_log()` automatically — calls land in `logs/usage_log.jsonl` from birth.**
 
 | Tool | In code? | In ElevenLabs dashboard? | Phase | Notes |
 |---|---|---|---|---|
-| `open_application` | ⚠️ skeleton in `tools.py` (allow-list: chrome, vscode, calculator, notes, spotify) | ❌ | Phase 2 | First end-to-end tool round-trip |
-| `save_file`        | ⚠️ skeleton in `tools.py` (sandboxed to `./generated/`) | ❌ | Phase 3 | |
-| `delegate_task`    | ⚠️ stub in `tools.py` — returns a "not built yet" message | ❌ | Phase 5 | Full impl via Claude Agent SDK; needs `max_turns` + timeout + allow-listed tools |
+| `open_application` | ⚠️ skeleton + ✅ wrapped with `wrap_log()` (allow-list: chrome, vscode, calculator, notes, spotify) | ❌ | Phase 2 (NEXT) | First end-to-end tool round-trip |
+| `save_file`        | ⚠️ skeleton + ✅ wrapped with `wrap_log()` (sandboxed to `./generated/`) | ❌ | Phase 3 | |
+| `delegate_task`    | ⚠️ stub + ✅ wrapped with `wrap_log()` — returns a "not built yet" message | ❌ | Phase 5 | Full impl via Claude Agent SDK; needs `max_turns` + timeout + allow-listed tools |
 | `search_web`       | ⏳ not started | ❌ | Phase 3 | DuckDuckGo via `langchain-community` |
 | `create_html_file` | ⏳ not started | ❌ | Phase 3 | Sandboxed |
 | `get_system_info`  | ⏳ not started | ❌ | Phase 3 | `psutil`, read-only |
@@ -96,8 +103,8 @@ Build order: **`1 → 1.5 → 2 → 3 → 5 → 6 → 6.5 → 4 → 7`**. Compou
 
 - **Phase 0** ✅ Scaffold
 - **Phase 1** ✅ Voice loop (no tools): `main.py` + ElevenLabs Conversation. Live audio confirmed 2026-05-25.
-- **Phase 1.5** ⏭️ ⭐ **Tool-usage log** — `logs/usage_log.jsonl` + a `wrap_log()` helper every tool wraps with (timestamp, tool name, short param summary, outcome, duration). **Secrets-safe** — never log `.env` values or sensitive params. Done before Phase 2 so every real tool is logged from birth, giving Phase 6.5 full telemetry to learn from.
-- **Phase 2** First real tool: `open_application` (learn the pattern)
+- **Phase 1.5** ✅ ⭐ **Tool-usage log** — `tool_logging.py` exports `wrap_log()`; all three skeleton tools wrapped at registration; thread-safe + fail-open + secrets-safe; logs go to `logs/usage_log.jsonl` (git-ignored). Completed 2026-05-25.
+- **Phase 2** ⏭️ First real tool: `open_application` (learn the pattern + dashboard registration)
 - **Phase 3** Core tools: `search_web`, `save_file`, `create_html_file`, `get_system_info`, `control_window`
 - **Phase 5** ⭐ Reasoning & delegation: `delegate_task` via Claude Agent SDK. Uses the SDK's built-in web search + file tools, so it's useful even before our `browse` tool exists; `browse` plugs into its allow-list later.
 - **Phase 6** ⭐ Persistent memory: `remember`/`recall`, loaded at session start. **v1 store format = JSON Lines** (append-only `.jsonl`, one record per line, each tagged `type` = `"fact"` | `"reflection"`). Clean upgrade path to a Chroma vector store later.
@@ -115,6 +122,8 @@ None currently — all resolved (see Decision log).
 ---
 
 ## 🧠 Decision log (newest first)
+- **2026-05-25 (late)** — **Phase 1.5 tool-usage log design contracts (locked in).** Three non-negotiables for `wrap_log()`: (1) **Thread-safe** via a single module-level `threading.Lock()` — sufficient for the single-process voice loop; do NOT upgrade to a queue without a real reason. (2) **Fail-open** — any exception inside the logging path is swallowed; the underlying tool's result or exception is always preserved. Logging must never break or block a tool action. (3) **Secrets-safe redaction rule:** for each top-level param key, if the key name (case-insensitive) contains any of `key`, `token`, `secret`, `password`, `passwd`, `api`, `auth`, `credential`, the value is replaced with `"<redacted>"`. Non-sensitive values are str-coerced and truncated to 80 chars. Greedy substring matching is acceptable — over-redaction beats leakage. Top-level only; nested dicts not recursed (flag for future tools with nested params).
+- **2026-05-25 (late)** — **Tool return values are NOT logged.** Only outcome (`"ok"` | `"error"`) and error message on failure. Privacy: tool returns can contain personal data. If we ever need result-content for debugging, add a separate `result_summary` field with the same redaction rule (deferred — not needed yet).
 - **2026-05-25 (evening)** — **ElevenLabs agent switched from Public to Private (auth-enabled and published).** Rafael flipped the agent's privacy in the dashboard after the live Phase 1 verification. Removes the remote-trigger risk that would otherwise have been a Phase 2 blocker once `open_application` is registered. No code change required.
 - **2026-05-25 (evening)** — **Phase 1 verified LIVE — single orchestrated test, no Rafael-own run.** Sequence: (1) Rafael swapped the dashboard voice from IVC → preset library voice, resolving the WebSocket `1002` close from the earlier headless smoke test. (2) Claude Code then orchestrated the *only* live verification of this session: started `main.py` via `python -u` (unbuffered stdout), redirected stdout/stderr to log files, ran for exactly 30 seconds before auto-terminating. (3) During that 30-second window Rafael spoke into his mic and listened to his speakers; he **did not separately run `python main.py` himself** in this session. The captured transcript confirmed full round-trip: agent's first message played, Rafael's speech transcribed correctly, Claude responded in butler-character ("Loud and clear, sir"), TTS played through speakers, zero stderr errors. **Phase 1 code path is proven end-to-end on real hardware via this one orchestrated test.** `client_tools` wiring (empty registry) is in place ready for Phase 2's first real tool.
 - **2026-05-25** — **`python -u` (unbuffered stdout) is required when launching `main.py` from a non-interactive shell** (e.g. Claude Code orchestration). Without it, Python's default block buffering hides "JARVIS is listening" and the callback prints until the process exits — making live monitoring impossible. For Rafael's own `python main.py` runs in a TTY this isn't needed (stdout is line-buffered automatically), but it's the standard pattern for any future orchestration / CI / log-capture work.
