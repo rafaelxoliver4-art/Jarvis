@@ -13,6 +13,9 @@ generated/*
 memory/*.local
 memory/*.db
 
+# Phase 1.5 — tool-usage telemetry (track folder, not contents)
+logs/*.jsonl
+
 # OS / editor
 .DS_Store
 .vscode/

@@ -17,6 +17,8 @@ import subprocess
 
 from elevenlabs.conversational_ai.conversation import ClientTools
 
+from tool_logging import wrap_log
+
 # ---------------------------------------------------------------------------
 # Safety helpers
 # ---------------------------------------------------------------------------
@@ -107,9 +109,12 @@ def delegate_task(parameters) -> str:
 # ---------------------------------------------------------------------------
 
 client_tools = ClientTools()
-client_tools.register("open_application", open_application)
-client_tools.register("save_file", save_file)
-client_tools.register("delegate_task", delegate_task)
+# Phase 1.5: every tool is wrapped with wrap_log() at registration time so
+# every call is recorded in logs/usage_log.jsonl from birth. The wrapper is
+# thread-safe, fail-open, and secrets-safe — see tool_logging.py for details.
+client_tools.register("open_application", wrap_log(open_application))
+client_tools.register("save_file",        wrap_log(save_file))
+client_tools.register("delegate_task",    wrap_log(delegate_task))
 
 # Dashboard registration cheat-sheet (add these as Client Tools in ElevenLabs):
 #   open_application — "Open a desktop app the user names."   param: app_name (string)
