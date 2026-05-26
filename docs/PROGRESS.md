@@ -12,10 +12,10 @@
 ---
 
 ## ⚡ TL;DR — paste-ready status
-- **Phase:** Phase 0 ✅ done · **Phase 1 — Voice loop IN PROGRESS** 🔧 (code path verified end-to-end on 2026-05-25; final live audio test deferred — see Next action).
-- **Next action:** Rafael swaps the agent's voice in the ElevenLabs dashboard from the current Instant Voice Clone (IVC) to a preset library voice (e.g., Charlie / Brian / Daniel / George), then — when his speakers are available — Claude Code re-runs the smoke test and (ideally) Rafael also runs `python main.py` and confirms live audio. See "Next action" section below for the full procedure.
-- **Blocked on:** Rafael's dashboard voice swap (IVC not on current plan — see WIP) AND a future moment when Rafael's speakers are available for live audio test. Rafael may delay the audio test; the dashboard fix is the only thing strictly required to unblock the next smoke test.
-- **Python decision:** ✅ **venv rebuilt** against Anaconda's Python 3.12.4 on 2026-05-25 (was 3.13.13). `elevenlabs==2.49.0`, `python-dotenv==1.2.2`, `PyAudio==0.2.14` installed and pinned in `requirements.txt`.
+- **Phase:** Phase 0 ✅ · Phase 1 ✅ (voice loop verified live 2026-05-25) · **Phase 1.5 — Tool-usage log** ⏭️ (next)
+- **Next action:** **Phase 1.5 — Tool-usage log.** Build `Jarvis/logs/usage_log.jsonl` + a `wrap_log()` helper every client tool wraps with: each call records timestamp (ISO 8601), tool name, short param summary, outcome (success/error), and duration. **MUST be secrets-safe** — never log `.env` values or sensitive params. Done before Phase 2 so every real tool is logged from birth, giving Phase 6.5's self-improvement loop full telemetry. No dashboard work required for this phase.
+- **Blocked on:** nothing. Phase 1.5 is internal-only (no external services, no dashboard, no keys). Ready to start when Rafael says go.
+- **Python decision:** ✅ venv on Anaconda Python 3.12.4. `elevenlabs==2.49.0`, `python-dotenv==1.2.2`, `PyAudio==0.2.14` installed and pinned in `requirements.txt`.
 - **Repo:** `C:\Users\Rafael\OneDrive\Área de Trabalho\Jarvis\` · branch `main` · run `git log --oneline` for the commit trail.
 - **Open questions:** none — all 7 resolved by the planning chat 2026-05-25 (see Decision log).
 
@@ -30,22 +30,33 @@ A voice-controlled agentic personal assistant that runs on Rafael's Windows mach
 
 ## ⏭️ Next action
 
-> **Where we are mid-Phase 1:** the code path is fully built and verified — venv on 3.12.4, deps installed, SDK imports + `Conversation` constructor signature verified against the live source, headless smoke test on 2026-05-25 confirmed: `main.py` starts cleanly, `.env` loads, the WebSocket connects, the agent session is created (conversation ID issued by the server), `start_session()` returns successfully. The smoke test was then terminated by the server with WebSocket close code `1002` and the message *"Instantly cloned voices are not available on your current plan. Please upgrade your subscription."* — i.e. the agent's voice in the dashboard is an Instant Voice Clone that the current plan can't use for TTS. **The code is correct; the remaining gap is a dashboard config tweak plus a live audio test.**
+**Phase 1.5 — Tool-usage log.** A minimal append-only telemetry layer that wraps every client tool we add from Phase 2 onward. Built before any real tool exists so we never have to retrofit.
 
-### What Rafael does next (UNBLOCK for the next smoke test)
-- [ ] **Swap the agent's voice in the ElevenLabs dashboard.** Open the Jarvis agent → Voice section → pick a **preset library voice** (NOT one under "My Voices" → "Cloned"). Recommended candidates that match the deep-British-butler feel: **Charlie** (if available on your plan), **Brian**, **Daniel**, **George**. Save the agent.
-- [ ] *(Optional but recommended while you're in the dashboard)* Flip the agent from **Public → Private** so it can't be invoked by anyone with the Agent ID. Required before Phase 2 lands the first real tool (`open_application`); fine to do now.
-- [ ] *(Optional)* Turn on speakers + mic when ready for the live audio test. Rafael may defer this — the next smoke test does not require it.
+### What Claude Code does next
+1. Create `Jarvis/logs/` directory with a `.gitkeep` (so the empty folder is tracked but logs themselves are git-ignored — add `logs/*.jsonl` to `.gitignore`).
+2. Add a `wrap_log()` helper to `tools.py` (or a new `tool_logging.py` if it stays cleaner). The helper takes a tool function and returns a wrapped version that:
+   - Records start time (ISO 8601 UTC).
+   - Calls the underlying tool.
+   - Records end time + duration in ms.
+   - Records tool name, outcome (`"ok"` | `"error"`), error message if any.
+   - Records a **short, secrets-safe param summary** (truncated, with `.env`-style values redacted).
+   - Appends one JSON object per call to `logs/usage_log.jsonl`.
+3. Wrap the three existing tool skeletons (`open_application`, `save_file`, `delegate_task`) with `wrap_log()` at registration time. They don't fire yet (nothing in the dashboard), but the wiring is ready for Phase 2.
+4. Unit-style smoke test: call one wrapped tool directly with a fake params dict, verify a record appears in `logs/usage_log.jsonl` with the expected fields and **no secrets**.
+5. Commit. Update PROGRESS.md: move Phase 1.5 → Done, set Next action = Phase 2 (`open_application` first real tool + dashboard registration).
 
-### What Claude Code does next (after Rafael confirms the voice was swapped)
-1. Re-run the **headless smoke test** of `main.py` (same 25-second window, capturing stdout/stderr). Success signal = no `1002` close, no traceback, process runs until killed.
-2. If the smoke test passes cleanly, report back; **then Rafael runs `python main.py` himself** when his audio is available to verify the full mic-in / speaker-out round-trip ("Hello Jarvis" → audible response).
-3. **Only after Rafael confirms live audio works**, do the Phase 1 wrap-up: move Phase 1 → Done, set Next action = Phase 1.5 — tool-usage log, commit.
+### Rafael's role this phase
+Mostly hands-off. You may be asked to **approve the secrets-redaction strategy** (e.g. "for any param key containing 'token', 'key', 'password', store `<redacted>` instead of the value") before I lock it in. You can also keep working in the planning chat in parallel — Phase 1.5 doesn't need external services or dashboard changes, so the next handoff back from the planning chat (probably for Phase 2's `open_application` dashboard registration) doesn't gate this work.
+
+### Reminders for Phase 2 (not now, but flagging)
+- **Switch the ElevenLabs agent from Public → Private** before Phase 2 lands `open_application`. A Public agent + a tool that opens apps on your box = remote-trigger risk. Easy 10-second flip in the dashboard.
+- Register `open_application` in the dashboard at Phase 2 start (matching name + description + `app_name` param).
 
 ---
 
 ## ✅ Done
-- **2026-05-25 — Phase 1 partial — code path verified end-to-end (final live audio test pending).** Old 3.13.13 venv deleted; new venv created against Anaconda Python 3.12.4. Installed `elevenlabs==2.49.0` + `python-dotenv==1.2.2` + `PyAudio==0.2.14` (cp312 prebuilt wheel — no C compile needed; no Visual C++ Build Tools required after all). `requirements.txt` pinned to those exact versions for reproducibility. SDK API verified against live `conversation.py` source on GitHub: `client_tools=` kwarg still accepted, `ClientTools` class still exported from `elevenlabs.conversational_ai.conversation`, all three callbacks used by the starter still in the constructor signature → **no changes needed to `main.py`** (kept the `client_tools` wiring per the planning chat's failure-isolation argument). `tools.py` confirmed side-effect-light at import (only `os.makedirs("./generated/", exist_ok=True)`). Headless smoke test ran: WebSocket connected, conversation session created server-side (got a `conv_…` ID), `start_session()` returned cleanly, "JARVIS is listening" printed; server then closed with `1002` due to the IVC voice (see WIP). No code bug — pipeline proven.
+- **2026-05-25 — Phase 1 — Voice loop ✅ COMPLETE.** Live audio test confirmed end-to-end working. Rafael swapped the dashboard voice from IVC to a preset (resolving the earlier WebSocket `1002` error), then ran a 30-second supervised conversation through `main.py`. Transcript captured cleanly via Claude Code orchestrating the run with `python -u` (unbuffered stdout) and a 30s background timer. Verified live: agent connects, plays first message "Good day, sir. How can I help?", transcribes Rafael's speech ("Hello Jarvis, can you hear me clearly?" → "What can you do for me right now?"), Claude responds in character ("Loud and clear, sir." / "I can help you open apps, files, or websites..."), TTS plays through speakers, callbacks (`callback_agent_response`, `callback_user_transcript`, `callback_agent_response_correction`) all fire, process exits cleanly with **zero stderr errors**. Phase 1 code path is proven; the `client_tools` wiring (empty registry) is in place ready for Phase 2.
+- **2026-05-25 — Phase 1 build mechanics:** venv rebuilt 3.13.13 → Anaconda 3.12.4; `elevenlabs==2.49.0` + `python-dotenv==1.2.2` + `PyAudio==0.2.14` installed via prebuilt cp312 wheels (no Visual C++ Build Tools needed); `requirements.txt` pinned. SDK API verified against live `conversation.py` source on GitHub (`client_tools=` kwarg + `ClientTools` class + callbacks unchanged); no `main.py` edits needed. `tools.py` confirmed side-effect-light at import.
 - **2026-05-24 — Phase 0 — Scaffold.** Project scaffolded at `C:\Users\Rafael\OneDrive\Área de Trabalho\Jarvis\` via the kickoff's alternative path (unzipped + flattened `starter/` → root). Python 3.13.13 `venv` created at `./venv` (no packages installed yet, per brief — will be rebuilt against 3.12 at Phase 1 start). `.env` populated with placeholders only — Rafael fills real keys.
 - **2026-05-24 — Bridge convention encoded** in `CLAUDE.md` so future Claude Code sessions automatically inherit it (PROGRESS.md is single source of truth; file wins on conflicts; lean + scannable for zero-context readers; mandatory end-of-session ritual).
 - **2026-05-24 — Python environment scan** completed: confirmed 3.12.4 (Anaconda) and 3.13.13 (Store) are the only Pythons available. No 3.11. Anaconda's interpreter is the chosen target for `venv`.
@@ -53,11 +64,10 @@ A voice-controlled agentic personal assistant that runs on Rafael's Windows mach
 ---
 
 ## 🔧 Known issues / WIP
-- **🎙️ Agent's voice in the dashboard is an Instant Voice Clone (IVC) — current plan can't use it.** Smoke test 2026-05-25 was killed by the server with WebSocket close `1002`: *"Instantly cloned voices are not available on your current plan. Please upgrade your subscription."* Fix: Rafael swaps the voice in the ElevenLabs dashboard to a preset library voice (Charlie / Brian / Daniel / George recommended). Once swapped, Claude Code re-runs the headless smoke test to confirm.
-- **🔊 Live audio test deferred** — Rafael's speakers were off during the 2026-05-25 attempt. Headless smoke test was used as a partial substitute (proved everything up to TTS). The final mic-in / speaker-out round-trip still needs Rafael's hardware. Phase 1 cannot be marked Done until that happens.
-- **🌐 ElevenLabs agent is currently set to Public.** Fine for Phase 1 testing on Rafael's machine, but **must be switched to Private before Phase 2** lands the first real tool (`open_application`). A Public agent + a tool that opens applications = anyone with the Agent ID could trigger commands on Rafael's box. Easy to flip in the dashboard.
+- **🌐 ElevenLabs agent is still set to Public.** Phase 1 works fine like this. **Must be switched to Private before Phase 2 lands `open_application`** — a Public agent + a tool that opens apps on Rafael's box = remote-trigger risk for anyone with the Agent ID. ~10-second dashboard flip.
 - **🔑 `ANTHROPIC_API_KEY` is still a placeholder in `.env`** — not needed until Phase 5 (`delegate_task` via Claude Agent SDK), but needs to be filled before that phase starts.
-- **🐍 Available Pythons on this machine** (verified 2026-05-24): 3.12.4 (Anaconda, used for Jarvis venv) and 3.13.13 (MS Store). No 3.11, no `py` launcher, no Visual C++ build tools — fine for now, since PyAudio's prebuilt cp312 wheel installed without compilation. Note if a future package needs to build from source.
+- **🎤 Audio-setup tip (observed during the Phase 1 test):** during the first ~10 seconds of the live run, Rafael's mic picked up the speakers, so JARVIS heard himself and started replying to his own echo. He noticed and pointed it out conversationally ("Might there be an audio feedback loop on your end?"). Standard fixes for next session: lower speaker volume, use headphones, or enable Windows microphone noise suppression. Not a code issue — purely a hardware/setup consideration that hit zero-cost for Phase 1 (the conversation recovered) but might matter for Phase 5's longer multi-step interactions.
+- **🐍 Available Pythons on this machine** (verified 2026-05-24): 3.12.4 (Anaconda, used for Jarvis venv) and 3.13.13 (MS Store). No 3.11, no `py` launcher, no Visual C++ build tools — fine so far, since PyAudio's prebuilt cp312 wheel installed without compilation. Note if a future package needs to build from source.
 - **🪪 Git identity is repo-local only** (`rafaelxoliver4@gmail.com` / `Rafael` in `.git/config`), not global. Change inside the Jarvis folder if a different name on commits is preferred.
 - **☁️ OneDrive sync** can occasionally lock files during heavy operations (venv writes, `pip install`). If a future operation hits a weird file-lock error, pause OneDrive sync for a minute and retry. Right-click `Jarvis/` → "Always keep on this device" recommended to prevent offloading.
 
@@ -86,8 +96,8 @@ Legend: ✅ done · ⚠️ partial / skeleton only · ❌ missing · ⏳ not sta
 Build order: **`1 → 1.5 → 2 → 3 → 5 → 6 → 6.5 → 4 → 7`**. Compounding-knowledge features (delegation + memory + self-reflection) land before the browser.
 
 - **Phase 0** ✅ Scaffold
-- **Phase 1** 🔧 IN PROGRESS — Voice loop (no tools): `main.py` + ElevenLabs Conversation. Code path verified 2026-05-25; awaiting dashboard voice swap + live audio test.
-- **Phase 1.5** ⭐ **Tool-usage log** — `logs/usage_log.jsonl` + a `wrap_log()` helper every tool wraps with (timestamp, tool name, short param summary, outcome, duration). **Secrets-safe** — never log `.env` values or sensitive params. Done before Phase 2 so every real tool is logged from birth, giving Phase 6.5 full telemetry to learn from.
+- **Phase 1** ✅ Voice loop (no tools): `main.py` + ElevenLabs Conversation. Live audio confirmed 2026-05-25.
+- **Phase 1.5** ⏭️ ⭐ **Tool-usage log** — `logs/usage_log.jsonl` + a `wrap_log()` helper every tool wraps with (timestamp, tool name, short param summary, outcome, duration). **Secrets-safe** — never log `.env` values or sensitive params. Done before Phase 2 so every real tool is logged from birth, giving Phase 6.5 full telemetry to learn from.
 - **Phase 2** First real tool: `open_application` (learn the pattern)
 - **Phase 3** Core tools: `search_web`, `save_file`, `create_html_file`, `get_system_info`, `control_window`
 - **Phase 5** ⭐ Reasoning & delegation: `delegate_task` via Claude Agent SDK. Uses the SDK's built-in web search + file tools, so it's useful even before our `browse` tool exists; `browse` plugs into its allow-list later.
@@ -106,6 +116,8 @@ None currently — all resolved (see Decision log).
 ---
 
 ## 🧠 Decision log (newest first)
+- **2026-05-25 (evening)** — **Phase 1 verified LIVE.** Rafael swapped the dashboard voice from IVC → preset library voice; the WebSocket `1002` from the earlier headless smoke test was resolved. Claude Code orchestrated a 30-second supervised live run (started `main.py` via `python -u` for unbuffered stdout, captured transcript, auto-stopped at 30s). Transcript confirmed full round-trip: agent's first message played, Rafael's speech transcribed correctly, Claude responded in butler-character ("Loud and clear, sir"), TTS played through speakers, zero stderr errors. **Phase 1 code path is proven end-to-end on real hardware.** `client_tools` wiring (empty registry) is in place ready for Phase 2's first real tool.
+- **2026-05-25** — **`python -u` (unbuffered stdout) is required when launching `main.py` from a non-interactive shell** (e.g. Claude Code orchestration). Without it, Python's default block buffering hides "JARVIS is listening" and the callback prints until the process exits — making live monitoring impossible. For Rafael's own `python main.py` runs in a TTY this isn't needed (stdout is line-buffered automatically), but it's the standard pattern for any future orchestration / CI / log-capture work.
 - **2026-05-25** — **SDK API verified against live source** before any Phase 1 changes. Fetched `Conversation.__init__` from `elevenlabs/elevenlabs-python` on GitHub `main`: `client_tools: Optional[ClientTools] = None` kwarg still present, `ClientTools` class still defined inside `elevenlabs.conversational_ai.conversation`, all three callbacks used by the starter (`callback_agent_response`, `callback_agent_response_correction`, `callback_user_transcript`) still accepted. Public docs intro page no longer shows `client_tools=` in its canonical example — that's a docs simplification, not an API removal. **No `main.py` changes were needed.**
 - **2026-05-25** — **Kept the `client_tools` wiring in Phase 1 `main.py`** per the planning chat's failure-isolation argument: each phase adds exactly one new variable; removing now + re-adding in Phase 2 would make Phase 2 the first test of the wiring AND the first real tool AND dashboard registration all at once. Wiring is a no-op at runtime in Phase 1 (no tools registered in dashboard), so cost is zero.
 - **2026-05-25** — **Phase 1 verification strategy = headless smoke test when Rafael's speakers unavailable.** Constraint: Claude Code has no microphone or speakers, so cannot directly confirm audio playback. Smoke test (run `main.py` for ~25s with stdout/stderr captured, then kill) proves the code path up to TTS — start-up, `.env` loading, SDK client construction, WebSocket connection, session creation, first-message callback — but NOT actual sound out of speakers or mic capture. Per the vigilance rule, Phase 1 stays "in progress" until Rafael's live hardware test confirms the round-trip end-to-end.
