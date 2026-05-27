@@ -12,9 +12,9 @@
 ---
 
 ## ⚡ TL;DR — paste-ready status
-- **Phase:** Phase 0 ✅ · Phase 1 ✅ · Phase 1.5 ✅ · Phase 2 ✅ (`open_application` verified live 2026-05-25) · **Phase 3 — Core tools** ⏭️ (next)
-- **Next action:** **Phase 3 — Core tools**, built one at a time. Suggested order (simplest → most complex, each registered & voice-tested before the next): `get_system_info` → `save_file` (skeleton exists) → `create_html_file` → `search_web` → `control_window`. Start with **`get_system_info`** (read-only, `psutil`, no allow-list, no external services — fastest sanity check that the Phase-2 pattern generalises to a brand-new tool).
-- **Blocked on:** nothing internal. Each tool in Phase 3 will pause for Rafael to register it in the ElevenLabs dashboard before its voice test — but the FIRST tool (`get_system_info`) can be coded immediately.
+- **Phase:** Phase 0 ✅ · Phase 1 ✅ · Phase 1.5 ✅ · Phase 2 ✅ · **Phase 3 IN PROGRESS** 🔧 — Tool #1 `get_system_info`: code complete, awaiting Rafael's dashboard registration + voice test
+- **Next action:** **Rafael registers `get_system_info` in the ElevenLabs dashboard**, then Claude Code orchestrates the 30s voice test. Implementation is already done locally (psutil 7.2.2 installed + pinned; function added to `tools.py` with cross-platform 12-hour time, battery-omit-on-no-battery, `wrap_log()` applied at registration; imports + direct functional call both verified). See "Next action" section below for the exact dashboard text.
+- **Blocked on:** Rafael's dashboard registration of `get_system_info`. **Working tree has uncommitted changes** (`requirements.txt` + `tools.py`) held for the post-voice-test Phase-3-Tool-#1 commit. PROGRESS.md interim-updated mid-phase for the planning chat.
 - **Python decision:** ✅ venv on Anaconda Python 3.12.4. `elevenlabs==2.49.0`, `python-dotenv==1.2.2`, `PyAudio==0.2.14` installed and pinned in `requirements.txt`.
 - **Repo:** `C:\Users\Rafael\OneDrive\Área de Trabalho\Jarvis\` · branch `main` · run `git log --oneline` for the commit trail.
 - **Open questions:** none — all 7 resolved by the planning chat 2026-05-25 (see Decision log).
@@ -32,7 +32,7 @@ A voice-controlled agentic personal assistant that runs on Rafael's Windows mach
 
 **Phase 3 — Core tools.** Five tools, built one at a time per CLAUDE.md working style. The Phase-2 round-trip pattern is now muscle memory: code → `wrap_log()` is automatic at registration → Rafael registers in dashboard → voice test → commit. Suggested build order:
 
-1. **`get_system_info`** ⏭️ ← **start here.** Read-only, uses `psutil` (already in `requirements.txt` but not installed yet — Phase 3 step 1 is `pip install psutil` and pin), returns time/date/battery/CPU/RAM. No allow-list, no external services, no irreversible actions. Sanity check that the Phase-2 pattern generalises to a brand-new tool not yet present in `tools.py`.
+1. **`get_system_info`** 🔧 ← **IN PROGRESS** (2026-05-25 evening). Code is complete; awaiting Rafael's dashboard registration + voice test. `psutil==7.2.2` installed and pinned. Function takes `parameters` (ignored), returns one short voice-friendly string like *"It's 9:02 PM on Tuesday. Battery's at 18% and on battery. CPU's at 22%, memory at 66%, sir."* Cross-platform 12-hour time (no `%-I`), battery clause omitted on machines with no battery, CPU sampled at `interval=0.5` for accuracy. Wrapped with `wrap_log()` at registration. `tools.py` imports clean, direct functional call verified.
 2. **`save_file`** — skeleton already exists in `tools.py` (sandboxed to `./generated/`); only needs dashboard registration + voice test. Should be quick.
 3. **`create_html_file`** — sibling of `save_file`; renders a small styled HTML page from a title/body and optionally opens it in the default browser.
 4. **`search_web`** — DuckDuckGo via `langchain-community` (already in `requirements.txt` but not installed). Requires `pip install langchain-community` step. Returns text summary.
@@ -49,8 +49,22 @@ A voice-controlled agentic personal assistant that runs on Rafael's Windows mach
 8. **Rafael confirms** the observable side-effect happened (file created / browser opened / system info read aloud / etc.).
 9. **Commit. Update PROGRESS.md.**
 
-### What Claude Code does next (immediately, without waiting on Rafael)
-- Tool #1 `get_system_info`: implement it. Install `psutil`, write the function, wrap at registration, run import sanity check. Then pause and hand off the dashboard registration text to Rafael. **No external services or keys needed for this tool.**
+### What Rafael does next (UNBLOCK Tool #1 — `get_system_info`)
+Register the tool in the ElevenLabs dashboard. Open the Jarvis agent → **Client Tools** section → **Add tool** → fill in:
+
+| Field | Value |
+|---|---|
+| **Name** | `get_system_info` (exact — must match the registered name in `tools.py`) |
+| **Description** | `Read out the current local time, day of the week, battery status (if applicable), and CPU and memory usage. Use this when the user asks about system status, current time or day, battery level, or computer performance.` |
+| **Parameters** | **TRY ZERO PARAMS FIRST.** If the dashboard UI rejects saving without a param, add one optional dummy: name=`_unused`, type=`string`, description=`Not used.`, required=**No**. SDK source confirms the function side can ignore the dict entirely (the SDK auto-injects `tool_call_id` regardless), so the function works the same either way. |
+
+Save the agent.
+
+### What Claude Code does next (after Rafael confirms registration is saved)
+1. Orchestrate a 30s live voice test (`python -u`, background timer, log capture). Rafael says *"Jarvis, what's my system status?"* (or any phrasing that should trigger the tool: "what time is it", "battery status", etc.).
+2. Verify the wrap_log entry in `logs/usage_log.jsonl`: `outcome=ok`, `tool=get_system_info`, `params` shows `tool_call_id` (always) plus any registered params.
+3. Rafael confirms Jarvis spoke the system info aloud (the actual time/battery/CPU readout, not just a generic acknowledgement).
+4. Commit `tools.py` + `requirements.txt` + the PROGRESS.md wrap-up as one Phase-3-Tool-#1 commit. Set Next action = Tool #2 (`save_file`).
 
 ### Reminders / standing flags for Phase 3
 - The ElevenLabs SDK auto-injects a `tool_call_id` field into every params dict (e.g., `"tool_call_id": "toolu_vrtx_..."`). Not a secret, not a leak — but it shows up in the wrap_log entries alongside our registered params. Don't be surprised when you see it.
@@ -70,6 +84,7 @@ A voice-controlled agentic personal assistant that runs on Rafael's Windows mach
 ---
 
 ## 🔧 Known issues / WIP
+- **🚧 Phase 3 Tool #1 mid-phase (2026-05-25 evening):** `get_system_info` code complete + wrapped + verified locally, but **working tree has uncommitted changes** (`tools.py` + `requirements.txt`) held for the post-voice-test commit. Awaiting (a) Rafael's dashboard registration of `get_system_info`, (b) orchestrated 30s voice test, (c) Rafael's audible confirmation. Single Phase-3-Tool-#1 commit then lands all changes together.
 - **🔑 `ANTHROPIC_API_KEY` is still a placeholder in `.env`** — not needed until Phase 5 (`delegate_task` via Claude Agent SDK), but needs to be filled before that phase starts.
 - **🎤 Audio-setup tip (observed during the Phase 1 test):** during the first ~10 seconds of the live run, Rafael's mic picked up the speakers, so JARVIS heard himself and started replying to his own echo. He noticed and pointed it out conversationally ("Might there be an audio feedback loop on your end?"). Standard fixes for next session: lower speaker volume, use headphones, or enable Windows microphone noise suppression. Not a code issue — purely a hardware/setup consideration that hit zero-cost for Phase 1 (the conversation recovered) but might matter for Phase 5's longer multi-step interactions.
 - **🐍 Available Pythons on this machine** (verified 2026-05-24): 3.12.4 (Anaconda, used for Jarvis venv) and 3.13.13 (MS Store). No 3.11, no `py` launcher, no Visual C++ build tools — fine so far, since PyAudio's prebuilt cp312 wheel installed without compilation. Note if a future package needs to build from source.
@@ -88,7 +103,7 @@ A tool registered in code but NOT in the ElevenLabs dashboard is invisible to th
 | `delegate_task`    | ⚠️ stub + ✅ wrapped with `wrap_log()` — returns a "not built yet" message | ❌ | Phase 5 | Full impl via Claude Agent SDK; needs `max_turns` + timeout + allow-listed tools |
 | `search_web`       | ⏳ not started | ❌ | Phase 3 | DuckDuckGo via `langchain-community` |
 | `create_html_file` | ⏳ not started | ❌ | Phase 3 | Sandboxed |
-| `get_system_info`  | ⏳ not started | ❌ | Phase 3 | `psutil`, read-only |
+| `get_system_info`  | ✅ in `tools.py` (cross-platform 12-hour time, battery-omit-on-no-battery, `psutil==7.2.2`) + wrapped with `wrap_log()` | ⏸️ awaiting Rafael's registration | Phase 3 🔧 | Voice-friendly read-only status string; sampled CPU at `interval=0.5` for accuracy |
 | `control_window`   | ⏳ not started | ❌ | Phase 3 | Allow-listed actions |
 | `browse(task)`     | ⏳ not started | ❌ | Phase 4 | Playwright/MCP, not pixel-clicking |
 | `remember` / `recall` | ⏳ not started | ❌ | Phase 6 | **North-star — load into context at session start** |
@@ -121,6 +136,7 @@ None currently — all resolved (see Decision log).
 ---
 
 ## 🧠 Decision log (newest first)
+- **2026-05-25 (evening)** — **Zero-param Client Tools: SDK-confirmed supported on function side; dashboard UI behavior verified empirically per-tool.** WebFetch'd the ElevenLabs SDK source: `ClientTools.register()` accepts any handler with `Callable[[dict], ...]` signature; the SDK always invokes with a dict containing at least `tool_call_id` (auto-injected). So registering a tool with zero declared params is fine functionally — the function just ignores the dict. The ElevenLabs **dashboard UI** behavior for zero-param registration is undocumented, so the standing pattern for read-only / no-input tools is: try zero params first; if the UI rejects, fall back to one optional dummy param (e.g., `_unused` string, not required). Applied to `get_system_info` and all future no-input tools.
 - **2026-05-25 (late)** — **Phase 2 verified LIVE: `open_application` end-to-end.** Same orchestration pattern as Phase 1 (Claude Code launched `main.py` via `python -u`, redirected stdout/stderr + snapshotted log line count, 30s background timer, auto-kill). Rafael said *"Hey Jarvis. Open calculator."* — agent transcribed correctly, called `open_application(app_name="calculator")`, `wrap_log()` captured one record (`outcome=ok`, `duration_ms=199`, no errors), Calculator launched on Rafael's desktop (visually confirmed), agent acknowledged in voice. Multi-turn conversation continued cleanly afterward (Rafael asked a math question; agent answered correctly without re-calling the tool — shows the agent's conversational context is intact across tool calls). **Phase-2 round-trip pattern is now reusable muscle memory for the remaining tools.**
 - **2026-05-25 (late)** — **ElevenLabs SDK auto-injects `tool_call_id` into the params dict** (observed: `"tool_call_id": "toolu_vrtx_01BNkWDaK7yLwcASZnyrnewQ"` alongside our registered `app_name`). The `toolu_vrtx_` prefix suggests Anthropic-via-Vertex under the hood at ElevenLabs. Not a secret, harmless metadata, useful for correlating client-side logs with the cloud agent. Does NOT match any of our 8 redaction substrings, so it's logged as-is. Expect this in every wrap_log entry from now on; no code change required.
 - **2026-05-25 (late)** — **Phase 1.5 tool-usage log design contracts (locked in).** Three non-negotiables for `wrap_log()`: (1) **Thread-safe** via a single module-level `threading.Lock()` — sufficient for the single-process voice loop; do NOT upgrade to a queue without a real reason. (2) **Fail-open** — any exception inside the logging path is swallowed; the underlying tool's result or exception is always preserved. Logging must never break or block a tool action. (3) **Secrets-safe redaction rule:** for each top-level param key, if the key name (case-insensitive) contains any of `key`, `token`, `secret`, `password`, `passwd`, `api`, `auth`, `credential`, the value is replaced with `"<redacted>"`. Non-sensitive values are str-coerced and truncated to 80 chars. Greedy substring matching is acceptable — over-redaction beats leakage. Top-level only; nested dicts not recursed (flag for future tools with nested params).
