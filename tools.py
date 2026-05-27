@@ -31,8 +31,23 @@ os.makedirs(GENERATED_DIR, exist_ok=True)
 
 
 def _safe_path(file_name: str) -> str:
-    """Resolve a filename to a path INSIDE ./generated/, refusing escapes."""
-    if not file_name or os.path.isabs(file_name) or ".." in file_name.replace("\\", "/").split("/"):
+    """Resolve a filename to a path INSIDE ./generated/, refusing escapes.
+
+    Phase 3 Tool #2 (2026-05-25) tightened this to also reject any forward
+    slash or backslash in the file_name — even non-escape subpaths like
+    "subdir/note.txt". Reasons:
+      1. Matches the agent's voice description ("Plain name only — no paths").
+      2. Without auto-mkdir of parent dirs, subpaths crash at open() with
+         FileNotFoundError instead of being refused politely.
+      3. Keeps the safety story consistent: any path-like file_name → refuse.
+    The realpath sandbox check below remains as the bedrock fallback in case
+    a future os.path implementation lets something through.
+    """
+    if (not file_name
+            or os.path.isabs(file_name)
+            or ".." in file_name.replace("\\", "/").split("/")
+            or "/" in file_name
+            or "\\" in file_name):
         raise ValueError("unsafe file name")
     path = os.path.realpath(os.path.join(GENERATED_DIR, file_name))
     if not path.startswith(os.path.realpath(GENERATED_DIR) + os.sep):
