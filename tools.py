@@ -11,6 +11,7 @@ REMEMBER: registering a tool in code is only half the job. You must ALSO registe
 ElevenLabs dashboard (matching name + description + parameters) or the agent can't call it.
 """
 
+import html
 import os
 import platform
 import subprocess
@@ -107,6 +108,66 @@ def save_file(parameters) -> str:
     return f"Saved to {os.path.basename(path)}, sir."
 
 
+def create_html_file(parameters) -> str:
+    """Render a small styled HTML page and save it into ./generated/ only.
+
+    Required params:
+      - file_name (str): must end in .html (case-insensitive). Plain name only;
+        same sandbox rules as save_file via _safe_path() — no '/', no '\\',
+        no '..', no absolute paths.
+      - data (str): body text. Newlines become <br> in the rendered page.
+
+    Optional param:
+      - title (str): page title. Defaults to "Untitled" if missing or empty.
+
+    Both title and data are HTML-escaped (via html.escape) before being
+    written into the template — prevents accidental tag interpretation.
+    Returns a short voice-friendly confirmation string.
+    """
+    file_name = parameters.get("file_name") or "page.html"
+    data      = parameters.get("data") or ""
+    title     = parameters.get("title") or "Untitled"
+
+    # Extension check (must end in .html, case-insensitive — no auto-append)
+    if not file_name.lower().endswith(".html"):
+        return "That file needs a .html extension, sir. I can only create HTML pages here."
+
+    # Sandbox check — _safe_path was hardened in Phase 3 Tool #2 to reject any
+    # '/' or '\\' as well as '..' / absolute paths.
+    try:
+        path = _safe_path(file_name)
+    except ValueError:
+        return "That file location isn't allowed, sir. I can only save inside the generated folder."
+
+    # Escape both title and body to prevent accidental tag interpretation in
+    # the saved file. Then turn newlines in the body into <br> so multi-line
+    # input renders naturally instead of collapsing.
+    safe_title = html.escape(title)
+    safe_body  = html.escape(data).replace("\n", "<br>\n")
+
+    page = f"""<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>{safe_title}</title>
+  <style>
+    body {{ font-family: system-ui, -apple-system, sans-serif; max-width: 720px;
+            margin: 2em auto; padding: 0 1em; line-height: 1.6; color: #222; }}
+    h1   {{ border-bottom: 2px solid #444; padding-bottom: 0.3em; }}
+  </style>
+</head>
+<body>
+  <h1>{safe_title}</h1>
+  <p>{safe_body}</p>
+</body>
+</html>
+"""
+
+    with open(path, "w", encoding="utf-8") as fh:
+        fh.write(page)
+    return f"Saved {os.path.basename(path)}, sir."
+
+
 def get_system_info(parameters) -> str:
     """Voice-friendly snapshot of system status (read-only).
 
@@ -169,11 +230,13 @@ client_tools = ClientTools()
 # thread-safe, fail-open, and secrets-safe — see tool_logging.py for details.
 client_tools.register("open_application", wrap_log(open_application))
 client_tools.register("save_file",        wrap_log(save_file))
+client_tools.register("create_html_file", wrap_log(create_html_file))
 client_tools.register("get_system_info",  wrap_log(get_system_info))
 client_tools.register("delegate_task",    wrap_log(delegate_task))
 
 # Dashboard registration cheat-sheet (add these as Client Tools in ElevenLabs):
 #   open_application — "Open a desktop app the user names."   param: app_name (string)
 #   save_file        — "Save text to a file."                 params: file_name (string), data (string)
+#   create_html_file — "Render a styled HTML page and save."  params: file_name (string, .html), data (string, body), title (string, optional)
 #   get_system_info  — "Read out current system status."      params: none (the SDK auto-injects tool_call_id)
 #   delegate_task    — "Run a complex multi-step task."       param: goal (string)
