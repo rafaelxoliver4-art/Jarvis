@@ -12,9 +12,9 @@
 ---
 
 ## ⚡ TL;DR — paste-ready status
-- **Phase:** Phase 0 ✅ · Phase 1 ✅ · Phase 1.5 ✅ · Phase 2 ✅ · **Phase 3 IN PROGRESS** 🔧 — Tools #1 `get_system_info` ✅ + #2 `save_file` ✅ (both verified live 2026-05-25); **Tool #3 `create_html_file`** ⏭️ next.
-- **Next action:** **Phase 3 Tool #3 — `create_html_file`.** Sibling of `save_file`. Sandboxed to `./generated/` (using the same `_safe_path()` helper we just hardened). Renders a small styled HTML page from a `title` + `data` (body) and saves it; optional auto-open in default browser. Return-valued tool → dashboard registration MUST have "Wait for response" ENABLED + Response timeout ≥ 5s.
-- **Blocked on:** nothing internal — `create_html_file` skeleton does NOT exist yet in `tools.py`. Claude Code will implement it, wrap it, run import sanity, then pause for Rafael's dashboard registration + voice test.
+- **Phase:** Phase 0 ✅ · Phase 1 ✅ · Phase 1.5 ✅ · Phase 2 ✅ · **Phase 3 IN PROGRESS** 🔧 — Tools #1 + #2 ✅ live; **Tool #3 `create_html_file`**: coded ✅ + wrapped ✅ + 5/5 safety tests passed ✅; awaiting Rafael's dashboard registration + voice test.
+- **Next action:** **Rafael registers `create_html_file` in the ElevenLabs dashboard** with "Wait for response" ENABLED + Response timeout = 5s. After registration is saved, Claude Code orchestrates the 30s voice test. Code is already done locally (function added to `tools.py` after `save_file`; reuses hardened `_safe_path()`; strict `.html` extension; `html.escape()` on title + data; newlines → `<br>`; minimal styled template; `wrap_log()` applied at registration). See "Next action" section below for the exact dashboard text.
+- **Blocked on:** Rafael's dashboard registration of `create_html_file`. **Working tree has uncommitted `tools.py`** held for the post-voice-test Phase-3-Tool-#3 wrap-up commit (only lands after voice + file-creation verified end-to-end). PROGRESS.md interim-updated mid-phase for the planning chat.
 - **Python decision:** ✅ venv on Anaconda Python 3.12.4. `elevenlabs==2.49.0`, `python-dotenv==1.2.2`, `PyAudio==0.2.14` installed and pinned in `requirements.txt`.
 - **Repo:** `C:\Users\Rafael\OneDrive\Área de Trabalho\Jarvis\` · branch `main` · run `git log --oneline` for the commit trail.
 - **Open questions:** none — all 7 resolved by the planning chat 2026-05-25 (see Decision log).
@@ -34,7 +34,7 @@ A voice-controlled agentic personal assistant that runs on Rafael's Windows mach
 
 1. **`get_system_info`** ✅ — verified live 2026-05-25.
 2. **`save_file`** ✅ — verified live 2026-05-25; `_safe_path` hardened to reject any `/` or `\` in filename (bug found + fixed during the safety test).
-3. **`create_html_file`** — sibling of `save_file`; renders a small styled HTML page from a title/body and optionally opens it in the default browser.
+3. **`create_html_file`** 🔧 ← **IN PROGRESS** (2026-05-25 late). Coded ✅, wrapped ✅, 5/5 safety tests passed ✅ — awaiting Rafael's dashboard registration + voice test. Sibling of `save_file`; renders a small styled HTML page from `title` + `data`. Reuses the hardened `_safe_path()`. Skipped auto-open in v1 per plan; can add later as v2.
 4. **`search_web`** — DuckDuckGo via `langchain-community` (already in `requirements.txt` but not installed). Requires `pip install langchain-community` step. Returns text summary.
 5. **`control_window`** — focus/minimize/close, allow-listed actions only. More complex (Windows-specific window-handle work). Last.
 
@@ -49,11 +49,19 @@ A voice-controlled agentic personal assistant that runs on Rafael's Windows mach
 8. **Rafael confirms** the observable side-effect happened (file created / browser opened / system info read aloud / etc.).
 9. **Commit. Update PROGRESS.md.**
 
-### What Claude Code does next (no Rafael block until dashboard step)
-1. **Implement `create_html_file(parameters)` in `tools.py`.** Two required params: `file_name` (string, must end in `.html`; reuse `_safe_path()` for sandboxing — `_safe_path` now correctly rejects any `/`, `\`, or `..`) and `data` (string, the body text). Optional param: `title` (string, defaults to "Untitled"). Wrap the content in a minimal styled HTML template (simple `<html><head><style>...</style></head><body><h1>{title}</h1><p>{data}</p></body></html>`). Save to `./generated/{file_name}`. Return a short string like *"Saved {file_name}, sir."* Optional v2 later: auto-open in default browser. Skip auto-open for v1 to keep the tool focused.
-2. **Wrap with `wrap_log()` at registration time** in `tools.py`.
-3. **Verify imports clean** + run a quick direct functional test (`create_html_file({"file_name": "test.html", "data": "hello"})` → file should appear in `./generated/`).
-4. **Pause for Rafael** to register `create_html_file` in the dashboard.
+### Implementation status: ✅ DONE (2026-05-25 late)
+Already locally done; held uncommitted until the voice test confirms end-to-end behavior.
+
+- `tools.py`: added `import html` (stdlib); added `create_html_file(parameters)` right after `save_file`. Two required params (`file_name` strict `.html` check, `data` body) + optional `title` (default "Untitled"). Reuses the hardened `_safe_path()`. `html.escape()` applied to both `title` and `data`; `\n` becomes `<br>\n` after escaping. Minimal styled template (system-ui font, max-width 720px, `h1` with bottom border). Returns *"Saved {file_name}, sir."* No auto-open in v1.
+- Registered as `client_tools.register("create_html_file", wrap_log(create_html_file))`. Dashboard cheat-sheet comment updated.
+- Imports verified clean (`tools.py` loads, `create_html_file.__name__` preserved through wrap_log).
+- **5/5 direct-invocation tests passed:**
+  - `../evil.html` (escape) → refused by `_safe_path`. ✅
+  - `subdir/page.html` (subpath) → refused by `_safe_path` (`/` check holds). ✅
+  - `page.txt` (wrong extension) → refused: *"That file needs a .html extension, sir."* ✅
+  - `note.html` positive control with newlines → saved (448 bytes), template valid, `\n` → `<br>` confirmed. ✅
+  - **XSS escape stress test:** `<script>alert(1)</script><b>bold</b>` in body + `<h1>hi</h1>` in title — all three dangerous tags escaped to `&lt;...&gt;` in the saved file. ✅
+- All 5 wrap_log entries clean (`outcome=ok`). Sandbox-escape filesystem check confirmed no HTML files leaked outside `./generated/`. Test artifacts (`note.html`, `inject.html`) cleaned up.
 
 ### What Rafael does next (UNBLOCK Tool #3 — `create_html_file`)
 After Claude Code finishes implementing the function locally, register the tool in the ElevenLabs dashboard:
@@ -93,6 +101,7 @@ Save the agent.
 ---
 
 ## 🔧 Known issues / WIP
+- **🚧 Phase 3 Tool #3 mid-phase (2026-05-25 late).** `create_html_file` code is complete in `tools.py` (function added, `html` stdlib imported, wrapped with `wrap_log()` at registration). 5/5 direct-invocation safety tests passed (3 refusals + 2 allowed including a `<script>` XSS-escape stress test). **Working tree has uncommitted `tools.py` changes** held for the post-voice-test Phase-3-Tool-#3 wrap-up commit. Awaiting (a) Rafael's dashboard registration of `create_html_file` (name + 3 params + "Wait for response" ENABLED + Response timeout 5s), (b) orchestrated 30s voice test, (c) Rafael's audible confirmation that an HTML file was created and Jarvis acknowledged it.
 - **🔑 `ANTHROPIC_API_KEY` is still a placeholder in `.env`** — not needed until Phase 5 (`delegate_task` via Claude Agent SDK), but needs to be filled before that phase starts.
 - **🎤 Audio-setup tip (observed during the Phase 1 test):** during the first ~10 seconds of the live run, Rafael's mic picked up the speakers, so JARVIS heard himself and started replying to his own echo. He noticed and pointed it out conversationally ("Might there be an audio feedback loop on your end?"). Standard fixes for next session: lower speaker volume, use headphones, or enable Windows microphone noise suppression. Not a code issue — purely a hardware/setup consideration that hit zero-cost for Phase 1 (the conversation recovered) but might matter for Phase 5's longer multi-step interactions.
 - **🐍 Available Pythons on this machine** (verified 2026-05-24): 3.12.4 (Anaconda, used for Jarvis venv) and 3.13.13 (MS Store). No 3.11, no `py` launcher, no Visual C++ build tools — fine so far, since PyAudio's prebuilt cp312 wheel installed without compilation. Note if a future package needs to build from source.
@@ -110,7 +119,7 @@ A tool registered in code but NOT in the ElevenLabs dashboard is invisible to th
 | `save_file`        | ✅ in `tools.py` (sandboxed to `./generated/`; `_safe_path` hardened 2026-05-25 to reject any `/` or `\` in filename) + wrapped with `wrap_log()` | ✅ registered 2026-05-25 (two string params, **"Wait for response" ENABLED**, **Response timeout 5s**) | Phase 3 ✅ | **Live-verified 2026-05-25**: voice save worked, file written to `./generated/`, Jarvis acknowledged; safety verified via direct invocation against 7 unsafe inputs |
 | `delegate_task`    | ⚠️ stub + ✅ wrapped with `wrap_log()` — returns a "not built yet" message | ❌ | Phase 5 | Full impl via Claude Agent SDK; needs `max_turns` + timeout + allow-listed tools |
 | `search_web`       | ⏳ not started | ❌ | Phase 3 | DuckDuckGo via `langchain-community` |
-| `create_html_file` | ⏳ not started | ❌ | Phase 3 | Sandboxed |
+| `create_html_file` | ✅ in `tools.py` (strict `.html` check, `_safe_path` sandbox reuse, `html.escape()` on title + data, `\n` → `<br>`, minimal styled template; **5/5 safety tests passed**) + wrapped with `wrap_log()` | ⏸️ awaiting Rafael's registration | Phase 3 🔧 | Sibling of `save_file`; v1 has NO auto-open; future v2 could add `auto_open` boolean |
 | `get_system_info`  | ✅ in `tools.py` (cross-platform 12-hour time, battery-omit-on-no-battery, `psutil==7.2.2`) + wrapped with `wrap_log()` | ✅ registered 2026-05-25 (**zero params**, **"Wait for response" ENABLED**) | Phase 3 ✅ | **Live-verified 2026-05-25**: Jarvis spoke the actual time/battery/CPU/memory aloud after Rafael enabled "Wait for response" |
 | `control_window`   | ⏳ not started | ❌ | Phase 3 | Allow-listed actions |
 | `browse(task)`     | ⏳ not started | ❌ | Phase 4 | Playwright/MCP, not pixel-clicking |
@@ -127,7 +136,7 @@ Build order: **`1 → 1.5 → 2 → 3 → 5 → 6 → 6.5 → 4 → 7`**. Compou
 - **Phase 1** ✅ Voice loop (no tools): `main.py` + ElevenLabs Conversation. Live audio confirmed 2026-05-25.
 - **Phase 1.5** ✅ ⭐ **Tool-usage log** — `tool_logging.py` exports `wrap_log()`; all three skeleton tools wrapped at registration; thread-safe + fail-open + secrets-safe; logs go to `logs/usage_log.jsonl` (git-ignored). Completed 2026-05-25.
 - **Phase 2** ✅ First real tool: `open_application` — live-verified 2026-05-25 (Calculator opened, Jarvis acknowledged in voice, wrap_log captured the call).
-- **Phase 3** 🔧 IN PROGRESS — Core tools, one at a time: `get_system_info` ✅ → `save_file` ✅ → **`create_html_file`** ⏭️ next → `search_web` → `control_window`
+- **Phase 3** 🔧 IN PROGRESS — Core tools, one at a time: `get_system_info` ✅ → `save_file` ✅ → **`create_html_file`** 🔧 (coded + 5/5 safety tests pass, awaiting Rafael's dashboard registration + voice test) → `search_web` → `control_window`
 - **Phase 5** ⭐ Reasoning & delegation: `delegate_task` via Claude Agent SDK. Uses the SDK's built-in web search + file tools, so it's useful even before our `browse` tool exists; `browse` plugs into its allow-list later.
 - **Phase 6** ⭐ Persistent memory: `remember`/`recall`, loaded at session start. **v1 store format = JSON Lines** (append-only `.jsonl`, one record per line, each tagged `type` = `"fact"` | `"reflection"`). Clean upgrade path to a Chroma vector store later.
 - **Phase 6.5** ⭐ **Self-improvement loop** (procedural memory only — NOT runtime self-modification): after every `delegate_task`, write a structured reflection note; future delegations include relevant notes in the system prompt. Reflection-note schema (refinable at the phase): `{date (ISO 8601), tags[] (for retrieval), goal (one sentence), tools_used[], outcome (succeeded|partial|failed), what_helped, what_to_avoid, advice_for_future_self}`. **The feature that delivers the north star.**
