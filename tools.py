@@ -14,6 +14,9 @@ ElevenLabs dashboard (matching name + description + parameters) or the agent can
 import os
 import platform
 import subprocess
+from datetime import datetime
+
+import psutil
 
 from elevenlabs.conversational_ai.conversation import ClientTools
 
@@ -89,6 +92,43 @@ def save_file(parameters) -> str:
     return f"Saved to {os.path.basename(path)}, sir."
 
 
+def get_system_info(parameters) -> str:
+    """Voice-friendly snapshot of system status (read-only).
+
+    Ignores its parameters — there's no user input for this tool. Returns ONE
+    short string suitable for TTS, summarising:
+      - Current local time + weekday (12-hour format, cross-platform).
+      - Battery percentage + plugged/unplugged (omitted on desktops with no battery).
+      - CPU usage % (sampled over 0.5s for accuracy — calling cpu_percent with
+        interval=0 returns a meaningless 0.0 on the first call).
+      - Memory (RAM) usage %.
+
+    All values are rounded to integers for voice friendliness.
+    """
+    now = datetime.now()
+    # Manual 12-hour conversion (avoids strftime("%-I") which is Linux-only —
+    # Windows would need "%#I", so we sidestep the difference entirely):
+    hour_12 = now.hour % 12 or 12
+    ampm = "AM" if now.hour < 12 else "PM"
+    time_str = f"{hour_12}:{now.minute:02d} {ampm} on {now.strftime('%A')}"
+
+    # CPU: blocks 0.5s — needed for an accurate reading on first call.
+    cpu_pct = int(round(psutil.cpu_percent(interval=0.5)))
+    mem_pct = int(round(psutil.virtual_memory().percent))
+
+    # Battery: sensors_battery() returns None on machines without a battery
+    # (e.g., desktops). Omit the clause cleanly in that case.
+    battery = psutil.sensors_battery()
+    if battery is not None:
+        bat_pct = int(round(battery.percent))
+        bat_state = "charging" if battery.power_plugged else "on battery"
+        bat_clause = f" Battery's at {bat_pct}% and {bat_state}."
+    else:
+        bat_clause = ""
+
+    return f"It's {time_str}.{bat_clause} CPU's at {cpu_pct}%, memory at {mem_pct}%, sir."
+
+
 def delegate_task(parameters) -> str:
     """
     Hand a complex, multi-step goal to an autonomous Claude Agent SDK loop.
@@ -114,9 +154,11 @@ client_tools = ClientTools()
 # thread-safe, fail-open, and secrets-safe — see tool_logging.py for details.
 client_tools.register("open_application", wrap_log(open_application))
 client_tools.register("save_file",        wrap_log(save_file))
+client_tools.register("get_system_info",  wrap_log(get_system_info))
 client_tools.register("delegate_task",    wrap_log(delegate_task))
 
 # Dashboard registration cheat-sheet (add these as Client Tools in ElevenLabs):
 #   open_application — "Open a desktop app the user names."   param: app_name (string)
 #   save_file        — "Save text to a file."                 params: file_name (string), data (string)
+#   get_system_info  — "Read out current system status."      params: none (the SDK auto-injects tool_call_id)
 #   delegate_task    — "Run a complex multi-step task."       param: goal (string)
