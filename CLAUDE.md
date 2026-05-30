@@ -3,9 +3,15 @@
 > This file is your foundational memory. You (Claude Code) read it at the start of every
 > session. Keep it lean (~150 lines). Detailed material lives in `docs/`.
 >
-> **At the start of every session, read `docs/PROGRESS.md` — it is the single source of truth
-> and the bridge to Rafael's separate planning chat. If anything conflicts with it, the file
-> wins.** See the "MANDATORY session ritual" section below.
+> **Session-start reading order** — read each in order, top to bottom:
+> 1. **`CONTEXT.md`** (project root) — durable "from scratch" briefing: vision, architecture,
+>    operating model, standing conventions, accumulated lessons. Read this FIRST if you're
+>    new to the project.
+> 2. **This file (`CLAUDE.md`)** — the rules of how you operate.
+> 3. **`docs/PROGRESS.md`** — current state and the single Next action. **This is the bridge
+>    to Rafael's separate planning chat. If anything conflicts with it, the file wins.**
+>
+> See the "MANDATORY session ritual" section below for the full convention.
 
 ## What this is
 A voice assistant. **ElevenLabs Agents** handles speech-to-text, text-to-speech, turn-taking,
@@ -83,8 +89,9 @@ Two LLMs (you and the planning chat) collaborating can compound mistakes — a p
 > zero-context reader is one of your most important jobs.
 
 At the START of every session:
-1. Read this file, then `docs/PROGRESS.md`. State the current phase and the single Next action
-   before doing anything else.
+1. Read `CONTEXT.md` (if you haven't already in this session — durable briefing), then this
+   file, then `docs/PROGRESS.md`. State the current phase and the single Next action before
+   doing anything else.
 
 At the END of every session (REQUIRED — not optional; if `PROGRESS.md` doesn't faithfully reflect
 what just happened, treat it as a failure):

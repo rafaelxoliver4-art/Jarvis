@@ -5,6 +5,8 @@
 > conflicts with this file, the file wins.** Keep it lean, scannable, and self-contained — a
 > fresh reader with zero other context must be able to act on it instantly.
 
+> **New to the project?** Read `CONTEXT.md` (project root) FIRST — it's the durable "from scratch" briefing covering vision, architecture, operating model, and accumulated standing rules. THIS file is just the live status.
+
 > Full operating model (who does what) lives in CLAUDE.md → Operating model.
 
 > Mutual vigilance: both Claudes stay alert to each other's mistakes; nothing is 'done' until verified. Full rules in CLAUDE.md → Error-awareness & verification.
@@ -12,9 +14,9 @@
 ---
 
 ## ⚡ TL;DR — paste-ready status
-- **Phase:** Phase 0 ✅ · Phase 1 ✅ · Phase 1.5 ✅ · Phase 2 ✅ · **Phase 3 IN PROGRESS** 🔧 — Tools #1 + #2 + #3 ✅ live (`create_html_file` voice-test + visually-rendered verified 2026-05-25); **Tool #4 `search_web`** ⏭️ next.
-- **Next action:** **Phase 3 Tool #4 — `search_web`.** DuckDuckGo via `langchain-community` (in `requirements.txt` already, but not installed yet). Needs `pip install langchain-community`, then implement the function in `tools.py` (returns a short text summary of search results), wrap with `wrap_log()`, run safety + functional tests, then hand off to Rafael for dashboard registration with **Response timeout = 15s** (per the standing slow-tool rule — web round-trip is 2–5s in the happy case and longer when DDG is sluggish).
-- **Blocked on:** nothing internal. Claude Code will start by installing the dep and implementing the function.
+- **Phase:** Phase 0 ✅ · Phase 1 ✅ · Phase 1.5 ✅ · Phase 2 ✅ · **Phase 3 IN PROGRESS** 🔧 — Tools #1 + #2 + #3 ✅ live; **Tool #4 `search_web`**: coded ✅ + wrapped ✅ + 5/5 direct tests passed ✅; awaiting Rafael's dashboard registration + voice test.
+- **Next action:** **Rafael registers `search_web` in the ElevenLabs dashboard** with one required `query` string param, "Wait for response" ENABLED, **Response timeout = 15 seconds** (per the standing slow-tool rule). After registration, Claude Code orchestrates the 30s voice test. Code already done locally — see "Implementation status: ✅ DONE" below for details.
+- **Blocked on:** Rafael's dashboard registration of `search_web`. **Working tree has uncommitted `tools.py` + `requirements.txt`** held for the post-voice-test Phase-3-Tool-#4 wrap-up commit. PROGRESS.md and the new CONTEXT.md were committed in this interim update so Rafael can upload both to the planning chat.
 - **Python decision:** ✅ venv on Anaconda Python 3.12.4. `elevenlabs==2.49.0`, `python-dotenv==1.2.2`, `PyAudio==0.2.14` installed and pinned in `requirements.txt`.
 - **Repo:** `C:\Users\Rafael\OneDrive\Área de Trabalho\Jarvis\` · branch `main` · run `git log --oneline` for the commit trail.
 - **Open questions:** none — all 7 resolved by the planning chat 2026-05-25 (see Decision log).
@@ -35,7 +37,7 @@ A voice-controlled agentic personal assistant that runs on Rafael's Windows mach
 1. **`get_system_info`** ✅ — verified live 2026-05-25.
 2. **`save_file`** ✅ — verified live 2026-05-25; `_safe_path` hardened to reject any `/` or `\` in filename (bug found + fixed during the safety test).
 3. **`create_html_file`** ✅ — verified live 2026-05-25.
-4. **`search_web`** ⏭️ ← **NEXT.** DuckDuckGo via `langchain-community` (already in `requirements.txt` but not installed). Requires `pip install langchain-community` step. Returns text summary. **Standing slow-tool rule applies: register with Response timeout = 15 seconds.**
+4. **`search_web`** 🔧 ← **IN PROGRESS** (2026-05-26). Coded ✅ + wrapped ✅ + 5/5 safety tests passed ✅; awaiting Rafael's dashboard registration. **PATH B chosen:** uses `ddgs` directly (NOT `langchain-community`, which was sunset). One dep instead of 28, structured results we format ourselves. Cap at ~500 chars + `...` for voice readback. Graceful degradation on network errors (catch + polite refusal → outcome=ok, with stderr breadcrumb). Standing slow-tool rule applies: **Response timeout = 15s** at registration.
 5. **`control_window`** — focus/minimize/close, allow-listed actions only. More complex (Windows-specific window-handle work). Last.
 
 ### Step-by-step for each tool (the standing pattern)
@@ -49,31 +51,46 @@ A voice-controlled agentic personal assistant that runs on Rafael's Windows mach
 8. **Rafael confirms** the observable side-effect happened (file created / browser opened / system info read aloud / etc.).
 9. **Commit. Update PROGRESS.md.**
 
-### What Claude Code does next (no Rafael block until dashboard step)
-1. **Install + pin dep:** `pip install langchain-community` in the venv, then `pip show` for the exact version, update `requirements.txt`. Note: langchain-community pulls in `duckduckgo-search` as a transitive — verify it lands cleanly.
-2. **Implement `search_web(parameters)` in `tools.py`** after `create_html_file`. One required param: `query` (string). Use `langchain_community.tools.DuckDuckGoSearchRun` or the equivalent current API (fetch live SDK docs if uncertain — DDG search wrapper has been renamed in past `langchain-community` releases). Returns a SHORT text summary (~few sentences worth of search results), suitable for voice readback. Cap result length at, say, ~500 characters truncated with "..." so Jarvis doesn't read out a wall of text. Handle network errors gracefully → return a polite *"I couldn't search just now, sir"* string rather than raising.
-3. **Wrap with `wrap_log()` at registration time.**
-4. **Verify imports clean** + run a direct functional test with a real query (e.g. *"Brazilian coffee"*). Inspect the returned string for sanity.
-5. **Safety test:** confirm `query` is just a string passed through — no path-sandbox concerns here, but verify that very long queries / non-ASCII queries (Portuguese, Chinese chars) don't crash.
-6. **Pause for Rafael** to register `search_web` in the dashboard.
+### Implementation status: ✅ DONE (2026-05-26)
+Already locally done; held uncommitted until the voice test confirms end-to-end.
+
+- **Path B chosen (deviation from the original plan, logged in Decision log):**
+  uses `ddgs` directly instead of `langchain-community`'s `DuckDuckGoSearchRun`,
+  because `langchain-community` is officially sunset and its underlying DDG
+  package was renamed (`duckduckgo-search` → `ddgs`). Path B = 1 dep instead
+  of 28; structured results we format ourselves; no deprecation warning.
+- `requirements.txt`: removed the `langchain-community` line, added
+  `ddgs==9.14.4` with a multi-line comment explaining the choice.
+- `tools.py`: added `import sys` + `from ddgs import DDGS`. Added
+  `search_web(parameters)` after `create_html_file`. Builds a *"{title}: {body}"*
+  summary from up to 3 DDG results, joined with " — ", capped at 500 content
+  chars + `"..."` marker. Empty query → polite *"What would you like me to
+  search for, sir?"* Network failure → caught internally, returns *"I couldn't
+  search just now, sir."* with stderr breadcrumb for debugging.
+- Registered as `client_tools.register("search_web", wrap_log(search_web))`.
+- Imports verified clean; 5/5 direct tests passed: empty query, normal
+  English (*"Brazilian coffee"*, real DDG call), Portuguese non-ASCII
+  (*"previsão do tempo São Paulo"*, real DDG call), 600-char long query
+  (no crash), and **mocked network failure** (polite refusal returned,
+  stderr breadcrumb visible, wrap_log `outcome=ok`).
 
 ### What Rafael does next (UNBLOCK Tool #4 — `search_web`)
-After Claude Code finishes implementing, register the tool in the ElevenLabs dashboard:
+Register the tool in the ElevenLabs dashboard:
 
 | Field | Value |
 |---|---|
 | **Name** | `search_web` (exact — must match the registered name in `tools.py`) |
-| **Description** | `Search the web (DuckDuckGo) for current information and return a short summary. Use when the user asks for facts, current events, news, or anything that requires fresh information from the web.` |
-| **Parameter** | `query` (string, required, *"The user's search query, in natural language."*) |
-| **🔴 "Wait for response"** | **ENABLED** (return-valued — agent needs to read the search summary back) |
-| **🟡 Response timeout** | **15 seconds** — DuckDuckGo + network round-trip can take 2–5s in the happy case; raise it to 15s to absorb slow days. (Standing slow-tool rule.) |
+| **Description** | `Search the web using DuckDuckGo for current information and return a short summary. Use when the user asks for facts, current events, news, weather, definitions, or anything that requires fresh information from the web.` |
+| **Param — `query`** | type=`string`, required=**Yes**, description=*"The user's search query, in natural language."* |
+| **🔴 "Wait for response"** | **ENABLED** (return-valued) |
+| **🟡 Response timeout** | **15 seconds** (slow-tool rule — DO NOT use the 1s default) |
 
 Save the agent.
 
 ### What Claude Code does after Rafael's dashboard confirmation
-1. Orchestrate a 30s live voice test. Rafael asks *"Jarvis, search the web for the latest news on quantum computing"* or similar.
-2. Verify (a) wrap_log entry: `outcome=ok`, `tool=search_web`, `query` param truncated to 80 chars per the redaction rule (not redacted — "query" doesn't match sensitive substrings); (b) Jarvis reads a short summary aloud.
-3. **Wrap-up:** commit + update PROGRESS.md. Set Next action = Tool #5 (`control_window`).
+1. Orchestrate a 30s live voice test. Rafael asks *"Jarvis, search the web for [topic]"* or similar.
+2. Verify (a) wrap_log entry: `outcome=ok`, `tool=search_web`, `query` param visible (truncated to 80 chars per the redaction rule — not redacted since "query" doesn't match sensitive substrings); (b) Jarvis reads a short summary aloud.
+3. **Wrap-up:** commit `tools.py` + `requirements.txt` + the PROGRESS.md Tool-#4-done update. Set Next action = Tool #5 (`control_window`).
 
 ### Reminders / standing flags for Phase 3
 - The ElevenLabs SDK auto-injects a `tool_call_id` field into every params dict (e.g., `"tool_call_id": "toolu_vrtx_..."`). Not a secret, not a leak — but it shows up in the wrap_log entries alongside our registered params. Don't be surprised when you see it.
@@ -96,6 +113,7 @@ Save the agent.
 ---
 
 ## 🔧 Known issues / WIP
+- **🚧 Phase 3 Tool #4 mid-phase (2026-05-26).** `search_web` code is complete in `tools.py` (uses `ddgs` directly per Path B). 5/5 direct-invocation tests passed. **Working tree has uncommitted `tools.py` + `requirements.txt`** held for the post-voice-test Phase-3-Tool-#4 wrap-up commit. Awaiting (a) Rafael's dashboard registration of `search_web` (one `query` string param, "Wait for response" ENABLED, Response timeout **15s**), (b) orchestrated 30s voice test, (c) Rafael's audible confirmation that Jarvis spoke a real search summary.
 - **🐛 `open_application` silently lies when Windows can't find the exe.** Discovered during Phase-3-Tool-#3 voice test when Jarvis chained `open_application(app_name="chrome")` after creating an HTML file. The allow-list entry for `chrome` is just `"chrome"`; `subprocess.Popen("chrome", shell=True)` doesn't raise (the shell starts fine — the shell command failing afterward leaks to stderr but doesn't fault `Popen`). Function returned *"Opening chrome, sir."*, wrap_log shows `outcome=ok`, but Chrome never opened. Likely affects `spotify` and `vscode` too — only `calculator` (`calc`) and `notes` (`notepad`) are true Windows builtins that resolve from bare names. **Fix path:** switch the Windows launch from `Popen(target, shell=True)` to `Popen(["cmd", "/c", "start", "", target], shell=False)` (the `start` command is registry-aware and finds Chrome/Spotify/VS Code via their App Paths registry entries). **Schedule:** fix before Phase 5 (`delegate_task`) goes live — autonomous loops that "lie" about success would be confusing to debug. Possibly slot in as Phase 3 Tool #5.5 or a quick fix between Tool #4 and Tool #5.
 - **🔑 `ANTHROPIC_API_KEY` is still a placeholder in `.env`** — not needed until Phase 5 (`delegate_task` via Claude Agent SDK), but needs to be filled before that phase starts.
 - **🎤 Audio-setup tip (observed during the Phase 1 test):** during the first ~10 seconds of the live run, Rafael's mic picked up the speakers, so JARVIS heard himself and started replying to his own echo. He noticed and pointed it out conversationally ("Might there be an audio feedback loop on your end?"). Standard fixes for next session: lower speaker volume, use headphones, or enable Windows microphone noise suppression. Not a code issue — purely a hardware/setup consideration that hit zero-cost for Phase 1 (the conversation recovered) but might matter for Phase 5's longer multi-step interactions.
@@ -113,7 +131,7 @@ A tool registered in code but NOT in the ElevenLabs dashboard is invisible to th
 | `open_application` | ✅ in `tools.py` (allow-list: chrome, vscode, calculator, notes, spotify) + wrapped with `wrap_log()` | ✅ registered 2026-05-25 (`app_name` string param) | Phase 2 ✅ | **Live-verified 2026-05-25** for `calculator` (worked perfectly). **⚠️ Known bug:** `chrome` and likely `spotify`/`vscode` entries point at executable names not on Windows PATH — `Popen(target, shell=True)` doesn't raise, so the function returns success even when shell can't find the exe. See WIP. Fix: switch to `["cmd","/c","start","",target]` (registry-aware) before Phase 5. |
 | `save_file`        | ✅ in `tools.py` (sandboxed to `./generated/`; `_safe_path` hardened 2026-05-25 to reject any `/` or `\` in filename) + wrapped with `wrap_log()` | ✅ registered 2026-05-25 (two string params, **"Wait for response" ENABLED**, **Response timeout 5s**) | Phase 3 ✅ | **Live-verified 2026-05-25**: voice save worked, file written to `./generated/`, Jarvis acknowledged; safety verified via direct invocation against 7 unsafe inputs |
 | `delegate_task`    | ⚠️ stub + ✅ wrapped with `wrap_log()` — returns a "not built yet" message | ❌ | Phase 5 | Full impl via Claude Agent SDK; needs `max_turns` + timeout + allow-listed tools |
-| `search_web`       | ⏳ not started | ❌ | Phase 3 | DuckDuckGo via `langchain-community` |
+| `search_web`       | ✅ in `tools.py` (uses `ddgs==9.14.4` directly, NOT langchain-community; 500-char cap with `...`; graceful degradation on network failure with stderr breadcrumb; 5/5 safety tests passed) + wrapped with `wrap_log()` | ⏸️ awaiting Rafael's registration | Phase 3 🔧 | **Path B**: ddgs direct, not langchain-community (sunset) — see Decision log |
 | `create_html_file` | ✅ in `tools.py` (strict `.html` check, `_safe_path` sandbox reuse, `html.escape()` on title + data, `\n` → `<br>`, minimal styled template) + wrapped with `wrap_log()` | ✅ registered 2026-05-25 (3 params, **"Wait for response" ENABLED**, **Response timeout 5s**) | Phase 3 ✅ | **Live-verified 2026-05-25**: coffee.html created + browser-rendered correctly (screenshot in commit). v1 has NO auto-open; agent chained `open_application` itself as a follow-up. |
 | `get_system_info`  | ✅ in `tools.py` (cross-platform 12-hour time, battery-omit-on-no-battery, `psutil==7.2.2`) + wrapped with `wrap_log()` | ✅ registered 2026-05-25 (**zero params**, **"Wait for response" ENABLED**) | Phase 3 ✅ | **Live-verified 2026-05-25**: Jarvis spoke the actual time/battery/CPU/memory aloud after Rafael enabled "Wait for response" |
 | `control_window`   | ⏳ not started | ❌ | Phase 3 | Allow-listed actions |
@@ -131,7 +149,7 @@ Build order: **`1 → 1.5 → 2 → 3 → 5 → 6 → 6.5 → 4 → 7`**. Compou
 - **Phase 1** ✅ Voice loop (no tools): `main.py` + ElevenLabs Conversation. Live audio confirmed 2026-05-25.
 - **Phase 1.5** ✅ ⭐ **Tool-usage log** — `tool_logging.py` exports `wrap_log()`; all three skeleton tools wrapped at registration; thread-safe + fail-open + secrets-safe; logs go to `logs/usage_log.jsonl` (git-ignored). Completed 2026-05-25.
 - **Phase 2** ✅ First real tool: `open_application` — live-verified 2026-05-25 (Calculator opened, Jarvis acknowledged in voice, wrap_log captured the call).
-- **Phase 3** 🔧 IN PROGRESS — Core tools, one at a time: `get_system_info` ✅ → `save_file` ✅ → `create_html_file` ✅ → **`search_web`** ⏭️ next → `control_window`
+- **Phase 3** 🔧 IN PROGRESS — Core tools, one at a time: `get_system_info` ✅ → `save_file` ✅ → `create_html_file` ✅ → **`search_web`** 🔧 (coded + 5/5 tests pass, awaiting Rafael's registration) → `control_window`
 - **Phase 5** ⭐ Reasoning & delegation: `delegate_task` via Claude Agent SDK. Uses the SDK's built-in web search + file tools, so it's useful even before our `browse` tool exists; `browse` plugs into its allow-list later.
 - **Phase 6** ⭐ Persistent memory: `remember`/`recall`, loaded at session start. **v1 store format = JSON Lines** (append-only `.jsonl`, one record per line, each tagged `type` = `"fact"` | `"reflection"`). Clean upgrade path to a Chroma vector store later.
 - **Phase 6.5** ⭐ **Self-improvement loop** (procedural memory only — NOT runtime self-modification): after every `delegate_task`, write a structured reflection note; future delegations include relevant notes in the system prompt. Reflection-note schema (refinable at the phase): `{date (ISO 8601), tags[] (for retrieval), goal (one sentence), tools_used[], outcome (succeeded|partial|failed), what_helped, what_to_avoid, advice_for_future_self}`. **The feature that delivers the north star.**
@@ -148,6 +166,8 @@ None currently — all resolved (see Decision log).
 ---
 
 ## 🧠 Decision log (newest first)
+- **2026-05-26** — ⭐ **Created `CONTEXT.md` at project root as the durable "from scratch" briefing for every new conversation.** Separate from PROGRESS.md: CONTEXT = durable knowledge (vision, architecture, operating model, standing conventions, accumulated lessons) — updates slowly; PROGRESS = live state (current phase, next action, today's WIP) — updates every session. Rafael uploads CONTEXT to both Claude Code sessions and the Claude.ai planning chat at the start of any new conversation. CLAUDE.md updated to point new Claude Code sessions at CONTEXT.md as the FIRST file to read. Standing rule: update CONTEXT.md after a phase wraps + a meaningful learning lands — not for tiny changes.
+- **2026-05-26** — ⭐ **Phase 3 Tool #4 `search_web` uses `ddgs` directly, NOT `langchain-community`'s `DuckDuckGoSearchRun` (Path B chosen).** Original spec said use `langchain-community`, but during install we discovered: (1) `langchain-community` emits a DeprecationWarning — the package is officially sunset by LangChain in favor of standalone integration packages; (2) the underlying DDG search package was renamed `duckduckgo-search` → `ddgs` and is no longer auto-installed by langchain-community. So both halves of the original spec are dying. Path B uses `from ddgs import DDGS` directly — **1 dep instead of 28**, no deprecation, structured results (`title`, `href`, `body`) we format ourselves, ~50 MB smaller install footprint. Vigilance rule in action: paused on the deprecation warning, surfaced the decision to Rafael instead of barrelling through. **Standing rule going forward:** when a future tool needs a capability, prefer the direct library over a meta-package wrapper (especially one with a deprecation warning).
 - **2026-05-25 (very late)** — ⭐ **Confirmed: the agent chains client tools across multi-turn conversation, AND correctly asks permission before consequential follow-ups.** During the Phase-3-Tool-#3 voice test, after Rafael said *"create an HTML page about Brazilian coffee called coffee.html"*, Jarvis called `create_html_file`, then proactively asked *"Shall I open it in Chrome for you?"*, and on Rafael's "yes" called `open_application(app_name="chrome")` as a second tool. Multi-turn context + tool chaining + permission-before-action all worked. First multi-tool chain in the project. **Implication for Phase 5 (`delegate_task`):** the LLM is capable enough to compose tools without explicit instruction — `delegate_task`'s Agent SDK loop will benefit from a similarly composable set of registered tools. Worth designing the Agent SDK's `allowed_tools` list with this composability in mind.
 - **2026-05-25 (very late)** — **`open_application` silently lies when Windows can't find the exe.** Surfaced during the same chained-tool test (chrome didn't actually launch but the function returned success; Jarvis hallucinated). Root cause: `subprocess.Popen("chrome", shell=True)` doesn't raise even if the shell can't find `chrome` — it just leaks an error to stderr after Popen returns. Affects any allow-list entry whose `target` isn't a Windows-PATH-resolvable builtin (likely `chrome`, `spotify`, `vscode`; `calc` and `notepad` work). Logged to WIP with the fix path (`cmd /c start "" target` — registry-aware). Schedule: before Phase 5 to avoid debugging-confusion in autonomous loops.
 - **2026-05-25 (late evening)** — ⭐ **Standing Phase-3+ rule: per-tool dashboard "Response timeout" defaults to 1 SECOND — bump it for any tool slower than ~700ms total round-trip.** Per Rafael's dashboard observation while registering `save_file`: the dashboard's Response timeout field defaults to 1s. `get_system_info` (~501ms) squeaked under it; `save_file` registered at 5s (plenty for local file I/O). **Future tools that will exceed 1s — `search_web` (web round-trip, expect 2–5s — bump to ~15s), `delegate_task` (multi-step LLM loop, expect many seconds — bump to ~30s)** — MUST have the timeout raised at registration time, otherwise the cloud agent times out before our SDK can send the result back and falls back to the generic "called successfully" string (same failure mode as the original Tool #1 bug). Add the timeout note to every future tool's dashboard registration text in this file.
