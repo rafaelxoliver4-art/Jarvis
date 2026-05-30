@@ -214,6 +214,9 @@ For every new tool from Phase 2 onward:
   maintenance status before installing — version churn (or stagnation)
   in the Python ecosystem is constant.
 
+### Periodic research passes (proactive improvement, complements reactive bug-driven learning)
+At each major phase boundary (start of Phase 5, start of Phase 6, etc.), the planning chat does a research pass: scan recent open-source Jarvis/agentic-assistant projects, framework releases (Claude Agent SDK, ElevenLabs SDK), OWASP/governance updates, and active research patterns relevant to the upcoming phase. Output: 2-4 concrete proposals (adopt / consider-later / reject) added to the Decision log. Reactive learning (capturing lessons from bugs we hit) continues every session; proactive research happens at phase boundaries only — keep it targeted, not generic. Don't over-do it: quality of proposals > volume.
+
 ### Explicit scope boundaries (what we are NOT building)
 These were considered and deliberately rejected during the architecture validation pass. A new session proposing any of these should be pushed back on.
 
@@ -277,6 +280,7 @@ current phase*, mirror its essence here.
 
 ## 6. Update history
 
+- **2026-05-30** — Added phase-boundary research-pass cadence to standing conventions. Proactive improvement (scan ecosystem at each phase boundary) complements the existing reactive improvement (capture lessons from bugs as they happen).
 - **2026-05-30** — **Phase 3 ✅ COMPLETE.** All 5 core tools live-verified. Tool #5 (`control_window`) added three durable lessons baked into § 3: (1) post-action verification on state-mutating OS-wrapper calls (pywinctl silently no-ops when Windows refuses an action); (2) UWP multi-handle picking-largest heuristic (Calculator opens 4 handles); (3) minimize+restore workaround for Windows anti-focus-stealing. `open_application` Chrome silent-lie bug fixed in the same wrap commit (`283d44b`) — registry-aware `cmd /c start "" target` live-verified end-to-end via voice test (Rafael said *"open Chrome"* / *"close Chrome"* — both worked). Known-bugs section now empty. Next: Phase 5 (`delegate_task` via Claude Agent SDK).
 - **2026-05-26** — Architectural validation pass — design compared to OpenJarvis / OpenClaw / Microsoft Agent Governance Toolkit / OWASP Top 10 for Agentic Apps 2026; confirmed core decisions match consensus 2026 best practice. Three additions pre-noted for their respective future phases (see PROGRESS.md Decision log).
 - **2026-05-26** — Phase 3 Tool #5 (`control_window`) build added three durable Windows-development lessons: prefer `pywinctl` over the stagnant `pygetwindow`; use `cmd /c start "" target` for registry-aware Windows app launching (not bare-exe Popen); use case-insensitive partial title substring matching for locale-friendly window targeting (verified empirically against PT-BR "Calculadora" matching "calc").
