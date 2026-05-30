@@ -4,7 +4,13 @@ python-dotenv==1.2.2
 
 # Tools
 psutil==7.2.2          # system info (Phase 3 Tool #1 — installed 2026-05-25)
-langchain-community    # free DuckDuckGo web search (Phase 3 Tool #4 — not installed yet)
+ddgs==9.14.4           # DuckDuckGo web search (Phase 3 Tool #4 — installed 2026-05-26)
+                       # (Phase 3 Tool #4 originally planned to use langchain-community's
+                       #  DuckDuckGoSearchRun, but that package was sunset and its underlying
+                       #  search lib was renamed `duckduckgo-search` -> `ddgs`. Now using
+                       #  `ddgs` directly: 1 dep instead of 28, no deprecation warnings,
+                       #  structured results [title, href, body] we format ourselves.
+                       #  See Decision log entry 2026-05-26.)
 
 # Reasoning / delegation (Phase 5)
 claude-agent-sdk

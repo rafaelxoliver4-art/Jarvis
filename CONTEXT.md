@@ -161,7 +161,8 @@ For every new tool from Phase 2 onward:
   correctly work with it OFF.
 - **Response timeout defaults to 1 SECOND.** Bump for any tool slower than
   ~700ms. Standing recommendations: `save_file`=5s, `create_html_file`=5s,
-  `search_web`=15s, future `delegate_task`=30s.
+  `search_web`=10–15s (verified live 2026-05-26 with a real DDG round-trip
+  of 2072 ms), future `delegate_task`=30s.
 - **Zero-param tools are supported** — the dashboard accepts tools with no
   parameters; the SDK auto-injects `tool_call_id`. No dummy param needed.
 
@@ -269,6 +270,7 @@ current phase*, mirror its essence here.
 
 ## 6. Update history
 
+- **2026-05-26** — `search_web` empirical timeout data — bumped the `search_web` Response-timeout standing rule from "15s" to "10–15s (verified live with a 2072 ms DDG round-trip)". Plus a new Decision-log entry on the standing pattern: when voice tests are noisy (e.g., audio echo loop), look at code-side evidence (wrap_log, duration_ms, direct-call replay) FIRST before doubting the result.
 - **2026-05-26** — Planning-chat additions — phase-reorder rationale, verifiability constraint on Phase 6.5, and an explicit out-of-scope section so future sessions don't re-propose runtime self-modification, multi-agent debate, dynamic tool creation, or cloud-stored memory.
 - **2026-05-26** — Created during Phase 3 Tool #4 (`search_web`) build.
   Consolidates conventions and learnings from Phases 0 through Phase 3

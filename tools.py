@@ -15,9 +15,11 @@ import html
 import os
 import platform
 import subprocess
+import sys
 from datetime import datetime
 
 import psutil
+from ddgs import DDGS
 
 from elevenlabs.conversational_ai.conversation import ClientTools
 
@@ -168,6 +170,67 @@ def create_html_file(parameters) -> str:
     return f"Saved {os.path.basename(path)}, sir."
 
 
+# Cap on the returned summary so Jarvis doesn't read a wall of text aloud.
+_SEARCH_MAX_CHARS = 500
+
+
+def search_web(parameters) -> str:
+    """Search DuckDuckGo and return a short text summary (voice-friendly).
+
+    Required param:
+      - query (string): the user's search query, in natural language.
+
+    Graceful degradation: any network / library error is caught and the
+    function returns a polite refusal string ("I couldn't search just now,
+    sir.") rather than raising. The underlying exception is printed to
+    stderr as a breadcrumb for debugging (NOT captured in wrap_log, which
+    only sees outcome=ok on this path). Consistent with the save_file
+    pattern (catch internal errors, return polite string).
+
+    Result is truncated at ~500 chars with "..." so the agent doesn't
+    read out a wall of search snippets in voice.
+
+    Phase 3 Tool #4 (2026-05-26). Uses ddgs directly — see Decision log
+    re: why we don't use langchain-community's DuckDuckGoSearchRun.
+    """
+    query = (parameters.get("query") or "").strip()
+    if not query:
+        return "What would you like me to search for, sir?"
+
+    try:
+        results = DDGS().text(query, max_results=3)
+    except Exception as exc:  # noqa: BLE001 — graceful degradation by design
+        # Breadcrumb to stderr for debugging. NOT to wrap_log; the function
+        # itself "succeeded" by returning a polite string (outcome=ok in
+        # wrap_log), matching the save_file refusal-on-bad-input pattern.
+        print(f"[search_web] {type(exc).__name__}: {exc}", file=sys.stderr)
+        return "I couldn't search just now, sir."
+
+    if not results:
+        return "I didn't find anything useful for that, sir."
+
+    # Build a compact summary: each result becomes "{title}: {body}".
+    # Cap the overall string at _SEARCH_MAX_CHARS so the voice readback
+    # stays short.
+    pieces = []
+    for r in results:
+        title = (r.get("title") or "").strip()
+        body  = (r.get("body")  or "").strip()
+        if title and body:
+            pieces.append(f"{title}: {body}")
+        elif body:
+            pieces.append(body)
+        elif title:
+            pieces.append(title)
+
+    summary = " — ".join(pieces) if pieces else "I didn't find anything useful for that, sir."
+
+    if len(summary) > _SEARCH_MAX_CHARS:
+        summary = summary[:_SEARCH_MAX_CHARS].rstrip() + "..."
+
+    return summary
+
+
 def get_system_info(parameters) -> str:
     """Voice-friendly snapshot of system status (read-only).
 
@@ -231,6 +294,7 @@ client_tools = ClientTools()
 client_tools.register("open_application", wrap_log(open_application))
 client_tools.register("save_file",        wrap_log(save_file))
 client_tools.register("create_html_file", wrap_log(create_html_file))
+client_tools.register("search_web",       wrap_log(search_web))
 client_tools.register("get_system_info",  wrap_log(get_system_info))
 client_tools.register("delegate_task",    wrap_log(delegate_task))
 
@@ -238,5 +302,6 @@ client_tools.register("delegate_task",    wrap_log(delegate_task))
 #   open_application — "Open a desktop app the user names."   param: app_name (string)
 #   save_file        — "Save text to a file."                 params: file_name (string), data (string)
 #   create_html_file — "Render a styled HTML page and save."  params: file_name (string, .html), data (string, body), title (string, optional)
+#   search_web       — "Search the web (DuckDuckGo)."         param: query (string). REQUIRES Wait-for-response ENABLED + Response timeout 15s.
 #   get_system_info  — "Read out current system status."      params: none (the SDK auto-injects tool_call_id)
 #   delegate_task    — "Run a complex multi-step task."       param: goal (string)
