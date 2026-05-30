@@ -55,10 +55,10 @@ Phase 0    ✅ Scaffold
 Phase 1    ✅ Voice loop (main.py + ElevenLabs Conversation)
 Phase 1.5  ✅ Tool-usage log (wrap_log + logs/usage_log.jsonl)
 Phase 2    ✅ First real tool: open_application
-Phase 3    🔧 IN PROGRESS — Core tools, one at a time
+Phase 3    ✅ COMPLETE (2026-05-30) — All 5 core tools live-verified
            ✅ get_system_info, ✅ save_file, ✅ create_html_file,
-           🔧 search_web (current), control_window (after)
-Phase 5    ⭐ Reasoning & delegation (delegate_task via Claude Agent SDK)
+           ✅ search_web, ✅ control_window
+Phase 5    ⭐ Reasoning & delegation (delegate_task via Claude Agent SDK) ← NEXT
 Phase 6    ⭐ Persistent memory (remember / recall)
 Phase 6.5  ⭐ Self-improvement loop (procedural memory, NOT runtime self-mod)
 Phase 4    Browser control (Playwright/MCP, deferred per north-star reorder)
@@ -187,17 +187,13 @@ For every new tool from Phase 2 onward:
 - **Verifiability constraint on Phase 6.5 self-improvement.** Reflection-note signal is strongest on objectively verifiable fields (tools_used, outcome, observable side-effect) and weakest on subjective quality ("was that briefing helpful?"). When designing reflection retrieval, lean on what's verifiable.
 - **Registry-aware Windows app launching: `cmd /c start "" target`, NOT `Popen(target, shell=True)`.** The bare-exe form silently fails when `target` isn't on Windows PATH — Popen doesn't raise because it successfully launches a shell; the shell THEN can't find the exe and leaks an error to stderr that the calling function never sees. Result: tool returns success while nothing happens. The `start` command resolves apps via the App Paths registry and reliably finds installed apps. The empty `""` is the window-title placeholder `start` expects when the first quoted arg is the program path. Apply this pattern to any Windows app-launch code.
 - **Cross-locale window-title matching: case-insensitive partial substring, with multiple patterns for non-cognate localized names.** Rafael's machine is PT-BR. Windows like Calculator (en) / Calculadora (pt) share the substring "calc" — a single case-insensitive substring match catches both. Non-cognate pairs like Notepad (en) / Bloco de Notas (pt) need an explicit list of alternative patterns. Verified empirically — the test Calculator opened with title `'Calculadora'` and was correctly matched by the `"calc"` pattern. Apply to any Windows window-control or window-search code.
+- **Post-action verification beats trusting silent-success from OS-wrapper libraries.** Discovered in Phase-3-Tool-#5's first voice test: `pywinctl.activate()` and `.minimize()` return silently even when Windows refused the action (e.g., `SetForegroundWindow` anti-focus-stealing protection blocks focus; UWP multi-handle Calculator was picking the wrong window). The function reported `outcome=ok` while nothing visibly happened. **Standing rule:** after any state-mutating call into a Win32 / OS wrapper library, check the post-state on the **same object reference** (e.g., `target.isMinimized` / `target.isActive`) and report honestly if the action didn't take. Apply to any future tool that wraps OS-level state changes.
+- **UWP apps open multiple window handles — pick the largest by area.** Calculator UWP opens 4 windows: the main UI + 3 hidden helpers. `getWindowsWithTitle("calc")` returns all 4; picking the first match silently mutates a wrong handle. Heuristic: `max(matches, key=lambda w: w.size.width * w.size.height)` — the main UI is always visibly the largest. Empirically verified against PT-BR `Calculadora`. **Standing rule:** any future window-control tool must use this heuristic, not first-match.
+- **Minimize+restore as a focus workaround for Windows anti-focus-stealing.** When `SetForegroundWindow` is blocked (common — Windows aggressively protects focus from background apps), a minimize→restore cycle reliably brings a window forward without tripping the restriction. Standard fallback pattern for any focus-bringing code on Windows.
 
 ### Known bugs (tracked in `docs/PROGRESS.md` → WIP)
 
-- **`open_application` silently lies on Windows** when an allow-list entry
-  isn't a true Windows PATH builtin (`chrome`, `spotify`, `vscode`
-  probably affected; `calc`/`notepad` work). `Popen(target, shell=True)`
-  doesn't raise even when the shell can't find the exe — function returns
-  "Opening …, sir." with wrap_log `outcome=ok` while nothing happens.
-  Fix path: use `Popen(["cmd","/c","start","",target], shell=False)`
-  (registry-aware). **Must fix before Phase 5** so autonomous loops
-  can't be fooled by silent "success."
+*(None currently. The `open_application` Chrome silent-lie was fixed and live-verified in the Phase 3 wrap commit `283d44b`, 2026-05-30.)*
 
 ### Tooling / dependency lessons
 
@@ -281,6 +277,7 @@ current phase*, mirror its essence here.
 
 ## 6. Update history
 
+- **2026-05-30** — **Phase 3 ✅ COMPLETE.** All 5 core tools live-verified. Tool #5 (`control_window`) added three durable lessons baked into § 3: (1) post-action verification on state-mutating OS-wrapper calls (pywinctl silently no-ops when Windows refuses an action); (2) UWP multi-handle picking-largest heuristic (Calculator opens 4 handles); (3) minimize+restore workaround for Windows anti-focus-stealing. `open_application` Chrome silent-lie bug fixed in the same wrap commit (`283d44b`) — registry-aware `cmd /c start "" target` live-verified end-to-end via voice test (Rafael said *"open Chrome"* / *"close Chrome"* — both worked). Known-bugs section now empty. Next: Phase 5 (`delegate_task` via Claude Agent SDK).
 - **2026-05-26** — Architectural validation pass — design compared to OpenJarvis / OpenClaw / Microsoft Agent Governance Toolkit / OWASP Top 10 for Agentic Apps 2026; confirmed core decisions match consensus 2026 best practice. Three additions pre-noted for their respective future phases (see PROGRESS.md Decision log).
 - **2026-05-26** — Phase 3 Tool #5 (`control_window`) build added three durable Windows-development lessons: prefer `pywinctl` over the stagnant `pygetwindow`; use `cmd /c start "" target` for registry-aware Windows app launching (not bare-exe Popen); use case-insensitive partial title substring matching for locale-friendly window targeting (verified empirically against PT-BR "Calculadora" matching "calc").
 - **2026-05-26** — `search_web` empirical timeout data — bumped the `search_web` Response-timeout standing rule from "15s" to "10–15s (verified live with a 2072 ms DDG round-trip)". Plus a new Decision-log entry on the standing pattern: when voice tests are noisy (e.g., audio echo loop), look at code-side evidence (wrap_log, duration_ms, direct-call replay) FIRST before doubting the result.
