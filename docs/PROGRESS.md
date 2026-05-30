@@ -14,9 +14,9 @@
 ---
 
 ## ⚡ TL;DR — paste-ready status
-- **Phase:** Phase 0 ✅ · Phase 1 ✅ · Phase 1.5 ✅ · Phase 2 ✅ · **Phase 3 IN PROGRESS** 🔧 — Tools #1 + #2 + #3 + #4 ✅ live (`search_web` verified 2026-05-26 — Jarvis spoke real DDG content about quantum computing); **Tool #5 `control_window`** ⏭️ next (final core tool).
-- **Next action:** **Phase 3 Tool #5 — `control_window`.** Final Phase 3 tool. Focus/minimize/close actions against an allow-list of windows. More complex than the others — Windows window-handle work via `pywin32` (likely new dep) or similar. Return-valued (acknowledges the action), so dashboard registration needs "Wait for response" ENABLED. After Tool #5 lands, Phase 3 wraps and we move to **Phase 5 — `delegate_task`** (the big ⭐ north-star phase: Claude Agent SDK + multi-step reasoning).
-- **Blocked on:** nothing internal. Claude Code can start designing `control_window` (allow-list of actions, allow-list of target windows, library choice) immediately on a "go".
+- **Phase:** Phase 0 ✅ · Phase 1 ✅ · Phase 1.5 ✅ · Phase 2 ✅ · **Phase 3 IN PROGRESS** 🔧 — Tools #1 + #2 + #3 + #4 ✅ live (`search_web` verified 2026-05-26 — Jarvis spoke real DDG content); **Tool #5 `control_window`** ⏭️ next (final core tool). **⏸️ Voice testing paused** — Rafael can't test audio right now (no headphones; speaker/mic setup has the recurring echo issue).
+- **Next action:** Rafael's call between TWO paths for Tool #5: **(A) Build Tool #5 code now, defer the voice test.** Claude Code implements `control_window` + wrap_log + direct-invocation safety test (these don't need Rafael's audio). The dashboard registration + 30s live voice test wait for whenever Rafael's audio is testable. Tool #5 sits in "coded + safety-verified, awaiting live audio" state — same shape as our other mid-phase holds. **(B) Pause Phase 3 entirely** until audio is back. No Tool #5 code work yet; resume the whole tool when speakers/mic/headphones are available. After Tool #5 lands (either path), Phase 3 wraps and we move to **Phase 5 — `delegate_task`** (the big ⭐ north-star phase). My pick: **Path A** — code-side work is real progress and the voice test was always going to be a separate gated step anyway.
+- **Blocked on:** Rafael's choice between Path A and Path B above. Tool #5's eventual live voice test additionally needs working audio (headphones strongly recommended given the echo loop affecting all prior voice tests — see WIP).
 - **Python decision:** ✅ venv on Anaconda Python 3.12.4. `elevenlabs==2.49.0`, `python-dotenv==1.2.2`, `PyAudio==0.2.14` installed and pinned in `requirements.txt`.
 - **Repo:** `C:\Users\Rafael\OneDrive\Área de Trabalho\Jarvis\` · branch `main` · run `git log --oneline` for the commit trail.
 - **Open questions:** none — all 7 resolved by the planning chat 2026-05-25 (see Decision log).
@@ -51,28 +51,28 @@ A voice-controlled agentic personal assistant that runs on Rafael's Windows mach
 8. **Rafael confirms** the observable side-effect happened (file created / browser opened / system info read aloud / etc.).
 9. **Commit. Update PROGRESS.md.**
 
-### What Claude Code does next (no Rafael block until library choice + dashboard step)
-1. **Library choice (~5 min):** evaluate `pywin32` (mature, complex, large) vs `pygetwindow` (small, simpler, may have limitations) vs the Windows-builtin `subprocess` + `nircmd`-style approaches. Pick the smallest reliable option. Likely `pygetwindow` for find/focus/minimize and a fallback for harder cases.
+### Why we're stopped here: voice testing paused
+Rafael said 2026-05-26: *"yeah i cant test with audio mic or headphones now"*. We can't run a 30s voice test on Tool #5 right now. The audio echo loop (see WIP) plus the lack of headphones means even attempting a test would be unreliable. Rather than push through, we're pausing and giving Rafael control over the next step.
+
+### Path A — build Tool #5 code now, defer the voice test (Claude Code's pick)
+All the code-side work for Tool #5 doesn't need Rafael's microphone or speakers:
+
+1. **Library choice (~5 min):** evaluate `pywin32` (mature, large) vs `pygetwindow` (small, simpler) vs Windows-builtin alternatives. Pick the smallest reliable option (lean: `pygetwindow`).
 2. *(if needed)* `pip install` + pin in `requirements.txt`.
-3. **Implement `control_window(parameters)` in `tools.py`** after `search_web`. Two required params: `action` (string: `focus` / `minimize` / `close` — allow-list) + `app_name` (string: friendly name matching the same allow-list family as `open_application`). Return short voice-friendly confirmation string. **Allow-list both `action` AND `app_name`** — reject unknown values politely.
+3. **Implement `control_window(parameters)` in `tools.py`** after `search_web`. Two required params: `action` (string: `focus` / `minimize` / `close` — allow-list) + `app_name` (string: friendly name matching the same allow-list family as `open_application`). Return short voice-friendly confirmation. Allow-list BOTH `action` and `app_name` — reject unknown values politely.
 4. **Wrap with `wrap_log()`** at registration.
-5. **Verify imports clean** + direct functional test (e.g., focus calculator, minimize chrome, etc.).
-6. **Direct-invocation safety test** (per the save_file pattern): bypass the agent and try edge cases — unknown `action`, unknown `app_name`, target window not currently open (graceful handling needed).
-7. **Pause for Rafael** to register `control_window` in the dashboard (two-param tool, Response timeout 5s likely sufficient since window ops are fast).
+5. **Verify imports clean** + direct functional test (focus calculator, minimize an open window, etc. — visible side effects Rafael can see on screen without needing audio).
+6. **Direct-invocation safety test** (per the save_file pattern): unknown `action`, unknown `app_name`, target window not currently open — all should refuse politely without crashing.
+7. **Then HALT** — `tools.py` + `requirements.txt` get held uncommitted (same pattern as all prior tools) until Rafael's audio is back. Then he registers in the dashboard, we orchestrate the voice test, and the wrap-up commit lands everything together.
 
-### What Rafael does next (UNBLOCK Tool #5)
-After Claude Code finishes implementing, register in the ElevenLabs dashboard:
-- Name: `control_window`
-- Description: *"Focus, minimize, or close a window for an allow-listed app. Use when the user asks to bring an app forward, hide it, or close it."*
-- Param `action` (string, required): *"One of: focus, minimize, close."*
-- Param `app_name` (string, required): *"Friendly name of the app (e.g., chrome, calculator, notes)."*
-- **"Wait for response" ENABLED.** Response timeout 5s.
+### Path B — pause Phase 3 entirely until audio is back
+Zero code work on Tool #5 yet. Resume the whole tool when Rafael has working audio (headphones, lower speaker volume, or a quieter setup). Tool #5 stays at "⏳ not started" in the table.
 
-### Reminder — the `open_application` Chrome bug should be fixed in the same vicinity
-While we're in `tools.py` working on window control, this is the natural moment to also fix the `open_application` bug (chrome/spotify/vscode silently failing because the targets aren't on Windows PATH). Both are Windows-app-interaction code. Could be done as a small refactor before, alongside, or after `control_window`. See WIP for details.
+### Reminder regardless of path — the `open_application` Chrome bug
+While Tool #5 involves Windows-app interaction code, this is the natural moment to also fix the `open_application` bug (chrome/spotify/vscode silently failing because the targets aren't on Windows PATH). Both are Windows-app code. If Rafael picks Path A, batch the Chrome fix into the Tool #5 work. If Path B, defer too.
 
 ### After Phase 3 wraps (Tool #5 done) — the path forward
-**Phase 5 (`delegate_task` via Claude Agent SDK)** is the next big milestone — the ⭐ north-star phase that introduces multi-step autonomous reasoning. Requires `ANTHROPIC_API_KEY` filled in `.env` (still placeholder per WIP). Will need careful design of the `allowed_tools` allow-list (which of our existing tools the autonomous loop can call), `max_turns` cap, and timeout.
+**Phase 5 (`delegate_task` via Claude Agent SDK)** is the next big milestone — the ⭐ north-star phase introducing multi-step autonomous reasoning. Requires `ANTHROPIC_API_KEY` filled in `.env` (still placeholder per WIP). Will need careful design of `allowed_tools` allow-list, `max_turns` cap, timeout. **The audio echo issue gets WORSE for Phase 5** since autonomous responses can be much longer than single-tool replies — strongly recommend Rafael's headphones / clean audio setup is sorted before Phase 5 lands.
 
 ### Reminders / standing flags for Phase 3
 - The ElevenLabs SDK auto-injects a `tool_call_id` field into every params dict (e.g., `"tool_call_id": "toolu_vrtx_..."`). Not a secret, not a leak — but it shows up in the wrap_log entries alongside our registered params. Don't be surprised when you see it.
@@ -96,6 +96,7 @@ While we're in `tools.py` working on window control, this is the natural moment 
 ---
 
 ## 🔧 Known issues / WIP
+- **⏸️ Voice testing paused (2026-05-26).** Rafael cannot currently test audio — no headphones available, and the speaker/mic setup has the recurring echo loop (see audio entry below). Affects: any tool that requires a live 30-second voice test. Tool #5 (`control_window`) is the immediate impact — Claude Code can do all the code work (implement, wrap_log, direct-invocation safety test) but the dashboard registration + voice test wait for clean audio. **Resolution:** Rafael gets headphones OR fixes speaker/mic setup OR otherwise enables clean audio, then we resume voice testing.
 - **🐛 `open_application` silently lies when Windows can't find the exe.** Discovered during Phase-3-Tool-#3 voice test when Jarvis chained `open_application(app_name="chrome")` after creating an HTML file. The allow-list entry for `chrome` is just `"chrome"`; `subprocess.Popen("chrome", shell=True)` doesn't raise (the shell starts fine — the shell command failing afterward leaks to stderr but doesn't fault `Popen`). Function returned *"Opening chrome, sir."*, wrap_log shows `outcome=ok`, but Chrome never opened. Likely affects `spotify` and `vscode` too — only `calculator` (`calc`) and `notes` (`notepad`) are true Windows builtins that resolve from bare names. **Fix path:** switch the Windows launch from `Popen(target, shell=True)` to `Popen(["cmd", "/c", "start", "", target], shell=False)` (the `start` command is registry-aware and finds Chrome/Spotify/VS Code via their App Paths registry entries). **Schedule:** fix before Phase 5 (`delegate_task`) goes live — autonomous loops that "lie" about success would be confusing to debug. Possibly slot in as Phase 3 Tool #5.5 or a quick fix between Tool #4 and Tool #5.
 - **🔑 `ANTHROPIC_API_KEY` is still a placeholder in `.env`** — not needed until Phase 5 (`delegate_task` via Claude Agent SDK), but needs to be filled before that phase starts.
 - **🎤 RECURRING audio echo loop — hardware setup, affects voice UX across ALL tools (not a code issue).** First seen in Phase 1; recurred in Phase 3 Tools #1, #3, and #4 (Tool #4 most severely). Pattern: Rafael's mic picks up his speakers, ElevenLabs transcribes Jarvis's own voice as if it were Rafael speaking, the agent then responds to itself — and worse, **ElevenLabs's built-in interruption logic fires when the agent "hears" speech mid-response, causing Jarvis to STOP speaking mid-sentence**. This makes long replies feel choppy and unreliable. **Confirmed in Tool #4's voice test (2026-05-26):** the underlying tool worked perfectly per all four code-side evidence checks (wrap_log, duration, direct-call replay, content specificity) — but Rafael's listening experience was degraded by this echo loop, not by any tool bug. **Fixes (Rafael's setup, all zero-code):** (a) use headphones, (b) lower speaker volume so the mic can't pick them up, (c) enable Windows microphone noise suppression / echo cancellation, (d) move mic farther from speakers. **Must address before Phase 5** (`delegate_task`) — long autonomous multi-step interactions will be much harder to follow if the echo keeps fragmenting Jarvis's speech.
