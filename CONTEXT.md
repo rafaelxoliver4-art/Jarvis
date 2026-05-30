@@ -185,6 +185,8 @@ For every new tool from Phase 2 onward:
   the code-layer. ALWAYS pair voice tests with direct-invocation tests
   for any tool with structural safety.
 - **Verifiability constraint on Phase 6.5 self-improvement.** Reflection-note signal is strongest on objectively verifiable fields (tools_used, outcome, observable side-effect) and weakest on subjective quality ("was that briefing helpful?"). When designing reflection retrieval, lean on what's verifiable.
+- **Registry-aware Windows app launching: `cmd /c start "" target`, NOT `Popen(target, shell=True)`.** The bare-exe form silently fails when `target` isn't on Windows PATH — Popen doesn't raise because it successfully launches a shell; the shell THEN can't find the exe and leaks an error to stderr that the calling function never sees. Result: tool returns success while nothing happens. The `start` command resolves apps via the App Paths registry and reliably finds installed apps. The empty `""` is the window-title placeholder `start` expects when the first quoted arg is the program path. Apply this pattern to any Windows app-launch code.
+- **Cross-locale window-title matching: case-insensitive partial substring, with multiple patterns for non-cognate localized names.** Rafael's machine is PT-BR. Windows like Calculator (en) / Calculadora (pt) share the substring "calc" — a single case-insensitive substring match catches both. Non-cognate pairs like Notepad (en) / Bloco de Notas (pt) need an explicit list of alternative patterns. Verified empirically — the test Calculator opened with title `'Calculadora'` and was correctly matched by the `"calc"` pattern. Apply to any Windows window-control or window-search code.
 
 ### Known bugs (tracked in `docs/PROGRESS.md` → WIP)
 
@@ -206,6 +208,15 @@ For every new tool from Phase 2 onward:
   28, no deprecation, and structured results (`title`, `href`, `body`)
   we format ourselves. **Standing rule:** when a future tool needs a
   capability, prefer the direct library over a meta-package wrapper.
+- **Use `pywinctl`, not `pygetwindow`, for Windows window control.**
+  Discovered during Phase-3 Tool #5: `pygetwindow` has been stagnant
+  since Oct 2020 (Beta status, no updates in 5 years). `pywinctl` is
+  the maintained successor by a different author (Sep 2024 release),
+  same API surface (`activate` / `minimize` / `close`), cross-platform,
+  pulls in `pywin32` for reliable Win32 calls. **Standing rule:** when
+  a PROGRESS.md-recommended library is "mature-old", re-check its PyPI
+  maintenance status before installing — version churn (or stagnation)
+  in the Python ecosystem is constant.
 
 ### Explicit scope boundaries (what we are NOT building)
 These were considered and deliberately rejected during the architecture validation pass. A new session proposing any of these should be pushed back on.
@@ -270,6 +281,8 @@ current phase*, mirror its essence here.
 
 ## 6. Update history
 
+- **2026-05-26** — Architectural validation pass — design compared to OpenJarvis / OpenClaw / Microsoft Agent Governance Toolkit / OWASP Top 10 for Agentic Apps 2026; confirmed core decisions match consensus 2026 best practice. Three additions pre-noted for their respective future phases (see PROGRESS.md Decision log).
+- **2026-05-26** — Phase 3 Tool #5 (`control_window`) build added three durable Windows-development lessons: prefer `pywinctl` over the stagnant `pygetwindow`; use `cmd /c start "" target` for registry-aware Windows app launching (not bare-exe Popen); use case-insensitive partial title substring matching for locale-friendly window targeting (verified empirically against PT-BR "Calculadora" matching "calc").
 - **2026-05-26** — `search_web` empirical timeout data — bumped the `search_web` Response-timeout standing rule from "15s" to "10–15s (verified live with a 2072 ms DDG round-trip)". Plus a new Decision-log entry on the standing pattern: when voice tests are noisy (e.g., audio echo loop), look at code-side evidence (wrap_log, duration_ms, direct-call replay) FIRST before doubting the result.
 - **2026-05-26** — Planning-chat additions — phase-reorder rationale, verifiability constraint on Phase 6.5, and an explicit out-of-scope section so future sessions don't re-propose runtime self-modification, multi-agent debate, dynamic tool creation, or cloud-stored memory.
 - **2026-05-26** — Created during Phase 3 Tool #4 (`search_web`) build.
