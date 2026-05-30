@@ -65,6 +65,8 @@ Phase 4    Browser control (Playwright/MCP, deferred per north-star reorder)
 Phase 7    Polish (push-to-talk first; wake word deferred)
 ```
 
+> Phase order reflects a deliberate reorder (decided 2026-05-25): delegation, memory, and self-reflection (5/6/6.5) ship before browser control (4) because compounding-knowledge features serve the north star directly; one-shot capabilities can wait.
+
 ⭐ = directly serves the self-improvement north star.
 
 ---
@@ -181,6 +183,7 @@ For every new tool from Phase 2 onward:
   prompt-layer (LLM refuses based on tool description) before reaching
   the code-layer. ALWAYS pair voice tests with direct-invocation tests
   for any tool with structural safety.
+- **Verifiability constraint on Phase 6.5 self-improvement.** Reflection-note signal is strongest on objectively verifiable fields (tools_used, outcome, observable side-effect) and weakest on subjective quality ("was that briefing helpful?"). When designing reflection retrieval, lean on what's verifiable.
 
 ### Known bugs (tracked in `docs/PROGRESS.md` → WIP)
 
@@ -202,6 +205,15 @@ For every new tool from Phase 2 onward:
   28, no deprecation, and structured results (`title`, `href`, `body`)
   we format ourselves. **Standing rule:** when a future tool needs a
   capability, prefer the direct library over a meta-package wrapper.
+
+### Explicit scope boundaries (what we are NOT building)
+These were considered and deliberately rejected during the architecture validation pass. A new session proposing any of these should be pushed back on.
+
+- **NOT runtime self-modification.** The assistant does not edit its own code or tools live. All capability changes go through the supervised Claude Code path Rafael approves. Phase 6.5 ("self-improvement") means procedural memory of past task outcomes, NOT the assistant rewriting itself.
+- **NOT multi-agent debate or dynamic tool creation at runtime.** Both attractive in research literature, both premature and complexity-heavy for a single-user personal assistant. Revisit only if a concrete need emerges.
+- **NOT open-ended shell access.** Voice + arbitrary shell = remote-code-execution risk. Every system action runs against an allow-list.
+- **NOT cloud-stored personal memory.** Memory stays local on Rafael's machine, with schema-validated writes (a defense against memory poisoning — OWASP agentic risk #5).
+- **NOT a chatbot.** If a feature is just "answer questions in voice," it doesn't belong here — that's what the agent's brain already does. New tools must take concrete action.
 
 ---
 
@@ -257,6 +269,7 @@ current phase*, mirror its essence here.
 
 ## 6. Update history
 
+- **2026-05-26** — Planning-chat additions — phase-reorder rationale, verifiability constraint on Phase 6.5, and an explicit out-of-scope section so future sessions don't re-propose runtime self-modification, multi-agent debate, dynamic tool creation, or cloud-stored memory.
 - **2026-05-26** — Created during Phase 3 Tool #4 (`search_web`) build.
   Consolidates conventions and learnings from Phases 0 through Phase 3
   Tool #4. Idea: Rafael wanted a durable "from scratch" briefing that
