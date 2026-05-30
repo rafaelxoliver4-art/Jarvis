@@ -5,6 +5,12 @@ python-dotenv==1.2.2
 # Tools
 psutil==7.2.2          # system info (Phase 3 Tool #1 — installed 2026-05-25)
 ddgs==9.14.4           # DuckDuckGo web search (Phase 3 Tool #4 — installed 2026-05-26)
+pywinctl==0.4.01       # Windows window control (Phase 3 Tool #5 — installed 2026-05-26)
+                       # (Chose pywinctl over the older pygetwindow: pywinctl is the
+                       #  maintained successor by a different author, updated Sep 2024.
+                       #  pygetwindow has been stagnant since Oct 2020 / Beta status.
+                       #  Pulls in pywin32==311 as transitive dep — required for
+                       #  reliable Windows window enumeration / control.)
                        # (Phase 3 Tool #4 originally planned to use langchain-community's
                        #  DuckDuckGoSearchRun, but that package was sunset and its underlying
                        #  search lib was renamed `duckduckgo-search` -> `ddgs`. Now using

@@ -16,9 +16,11 @@ import os
 import platform
 import subprocess
 import sys
+import time
 from datetime import datetime
 
 import psutil
+import pywinctl
 from ddgs import DDGS
 
 from elevenlabs.conversational_ai.conversation import ClientTools
@@ -89,7 +91,16 @@ def open_application(parameters) -> str:
         if system == "Darwin":
             subprocess.Popen(["open", "-a", target])
         elif system == "Windows":
-            subprocess.Popen(target, shell=True)
+            # Phase 3 Tool #5 fix (2026-05-26): use `cmd /c start "" target`
+            # instead of `Popen(target, shell=True)`. The old form silently
+            # failed when `target` wasn't a Windows-PATH builtin (chrome,
+            # spotify, vscode) — Popen would launch a shell, the shell couldn't
+            # find the exe, but Popen returned without raising so the function
+            # claimed success. The `start` command is registry-aware (resolves
+            # exes via App Paths) and reliably finds installed apps. The
+            # empty "" is the window-title placeholder `start` expects when
+            # the first quoted arg is the program path.
+            subprocess.Popen(["cmd", "/c", "start", "", target], shell=False)
         else:  # Linux
             subprocess.Popen([target])
         return f"Opening {app}, sir."
@@ -231,6 +242,133 @@ def search_web(parameters) -> str:
     return summary
 
 
+# Allow-listed actions for control_window. Adding new actions here = adding new
+# capability; both action AND app_name must be on-list (structural safety).
+_CONTROL_ACTIONS = ("focus", "minimize", "close")
+
+# Allow-listed apps with their window-title patterns. Patterns are matched
+# CASE-INSENSITIVE SUBSTRING against w.title.lower(). The substring approach
+# is deliberately locale-friendly: "calc" matches both English "Calculator"
+# and PT-BR "Calculadora"; non-cognate names (notes vs bloco de notas) get
+# multiple alternative patterns. Extend deliberately.
+_APP_WINDOW_PATTERNS = {
+    "chrome":     ["chrome"],
+    "vscode":     ["visual studio code"],
+    "calculator": ["calc"],                          # en + pt locales
+    "notes":      ["notepad", "bloco de notas"],     # en + pt locales
+    "spotify":    ["spotify"],
+}
+
+
+def control_window(parameters) -> str:
+    """Focus, minimize, or close an allow-listed app's window.
+
+    Required params:
+      - action (str): one of "focus", "minimize", "close" (allow-list).
+      - app_name (str): friendly name from the same family as open_application
+        (chrome, vscode, calculator, notes, spotify) — allow-listed.
+
+    Refuses politely (returns a string, never raises) on:
+      - unknown action / app_name
+      - target window not currently open
+      - window-system errors at enumeration or action time
+
+    Uses pywinctl (active fork of pygetwindow). Window-title matching is
+    case-insensitive substring — handles PT-BR locale ("Calculadora" matches
+    "calc"). First matching window wins; pywinctl returns the topmost.
+    """
+    action = (parameters.get("action") or "").strip().lower()
+    app_name = (parameters.get("app_name") or "").strip().lower()
+
+    if action not in _CONTROL_ACTIONS:
+        return "I can only focus, minimize, or close windows, sir."
+
+    if app_name not in _APP_WINDOW_PATTERNS:
+        allowed = ", ".join(sorted(_APP_WINDOW_PATTERNS))
+        return f"I don't manage '{app_name}', sir. I can manage: {allowed}."
+
+    patterns = _APP_WINDOW_PATTERNS[app_name]
+
+    # Enumerate windows (this can fail on unusual Windows configs)
+    try:
+        all_windows = pywinctl.getAllWindows()
+        matches = [w for w in all_windows
+                   if w.title and any(p in w.title.lower() for p in patterns)]
+    except Exception as exc:  # noqa: BLE001 — graceful degradation
+        print(f"[control_window] enum {type(exc).__name__}: {exc}", file=sys.stderr)
+        return "I couldn't reach the window system, sir."
+
+    if not matches:
+        return f"{app_name.capitalize()} doesn't seem to be open, sir."
+
+    # UWP apps (Calculator, Notepad on Win11, etc.) spawn multiple window
+    # handles per logical app: a main visible window + small ghost/auxiliary
+    # handles. "First match wins" can pick a ghost. Picking the largest
+    # window by area reliably hits the main visible one.
+    # (Phase 3 Tool #5 fix 2026-05-30 — discovered when Calculator's 4-handle
+    # arrangement caused the original code to act on a 237x39 ghost handle
+    # while the 502x810 main window was untouched.)
+    def _window_area(w):
+        try:
+            return w.size.width * w.size.height
+        except Exception:  # noqa: BLE001
+            return 0
+
+    target = max(matches, key=_window_area)
+    try:
+        if action == "focus":
+            # Phase 3 Tool #5 fix (2026-05-30): pywinctl.activate() silently
+            # fails when Windows blocks focus stealing (SetForegroundWindow
+            # restriction). The old code claimed success regardless. Now we
+            # VERIFY isActive after; if not, try the minimize+restore
+            # workaround which often defeats the focus-stealing block; if
+            # THAT also fails, return a polite refusal that's honest about
+            # the OS limitation.
+            target.activate()
+            time.sleep(0.10)  # let Windows process the state change
+            if target.isActive:
+                return f"{app_name.capitalize()} focused, sir."
+            # Workaround: minimize then restore forces a state transition
+            # that Windows usually allows even when SetForegroundWindow is
+            # refused.
+            try:
+                target.minimize()
+                time.sleep(0.10)
+                target.restore()
+                time.sleep(0.10)
+                if target.isActive:
+                    return f"{app_name.capitalize()} focused, sir."
+            except Exception:  # noqa: BLE001
+                pass  # fall through to polite refusal
+            return (f"I couldn't bring {app_name} forward, sir — "
+                    f"Windows blocked the focus change.")
+
+        if action == "minimize":
+            target.minimize()
+            time.sleep(0.10)  # let Windows process
+            if target.isMinimized:
+                return f"Minimized {app_name}, sir."
+            return f"I couldn't minimize {app_name}, sir."
+
+        if action == "close":
+            target.close()
+            time.sleep(0.20)  # close is slower than min/focus; app may prompt
+            # Verify by re-enumerating: is any window matching our patterns
+            # still around? (target.isAlive may be stale after close.)
+            still_open = [w for w in pywinctl.getAllWindows()
+                          if w.title and any(p in w.title.lower() for p in patterns)]
+            if not still_open:
+                return f"Closed {app_name}, sir."
+            return (f"I sent the close request to {app_name}, sir, "
+                    f"but its window is still open — it may be prompting "
+                    f"you to save.")
+    except Exception as exc:  # noqa: BLE001 — graceful degradation
+        print(f"[control_window] {action} {type(exc).__name__}: {exc}", file=sys.stderr)
+        return f"I couldn't {action} {app_name}, sir."
+
+    return f"I'm not sure what happened with {app_name}, sir."  # belt-and-suspenders
+
+
 def get_system_info(parameters) -> str:
     """Voice-friendly snapshot of system status (read-only).
 
@@ -295,6 +433,7 @@ client_tools.register("open_application", wrap_log(open_application))
 client_tools.register("save_file",        wrap_log(save_file))
 client_tools.register("create_html_file", wrap_log(create_html_file))
 client_tools.register("search_web",       wrap_log(search_web))
+client_tools.register("control_window",   wrap_log(control_window))
 client_tools.register("get_system_info",  wrap_log(get_system_info))
 client_tools.register("delegate_task",    wrap_log(delegate_task))
 
@@ -303,5 +442,6 @@ client_tools.register("delegate_task",    wrap_log(delegate_task))
 #   save_file        — "Save text to a file."                 params: file_name (string), data (string)
 #   create_html_file — "Render a styled HTML page and save."  params: file_name (string, .html), data (string, body), title (string, optional)
 #   search_web       — "Search the web (DuckDuckGo)."         param: query (string). REQUIRES Wait-for-response ENABLED + Response timeout 15s.
+#   control_window   — "Focus / minimize / close a window."   params: action (string: focus|minimize|close), app_name (string). Wait-for-response ENABLED + Response timeout 5s.
 #   get_system_info  — "Read out current system status."      params: none (the SDK auto-injects tool_call_id)
 #   delegate_task    — "Run a complex multi-step task."       param: goal (string)
