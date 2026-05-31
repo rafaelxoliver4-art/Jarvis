@@ -48,6 +48,8 @@ Persistent memory, procedural skills, and post-task self-reflection are
 load-bearing — not nice-to-haves. When picking what to build next, **prefer
 features that compound knowledge over one-shot capabilities.**
 
+**End goal (2026-05-30):** the self-improvement north star serves a purpose — JARVIS exists to turn Rafael's ideas into shipped products (apps, sites, ultimately a business), orchestrating his Claude ecosystem (Claude Code, the API, `delegate_task`'s Agent SDK loop). `delegate_task` (Phase 5) is the first brick: speak a build goal → autonomous Claude coding loop executes → reports back. Read the roadmap through "does this help Rafael ship?" Realistic line: JARVIS accelerates/executes; the idea, judgment, and product decisions are Rafael's.
+
 ### Where the project is (high level — read PROGRESS.md for detail)
 
 ```
@@ -216,6 +218,9 @@ For every new tool from Phase 2 onward:
 
 ### Periodic research passes (proactive improvement, complements reactive bug-driven learning)
 At each major phase boundary (start of Phase 5, start of Phase 6, etc.), the planning chat does a research pass: scan recent open-source Jarvis/agentic-assistant projects, framework releases (Claude Agent SDK, ElevenLabs SDK), OWASP/governance updates, and active research patterns relevant to the upcoming phase. Output: 2-4 concrete proposals (adopt / consider-later / reject) added to the Decision log. Reactive learning (capturing lessons from bugs we hit) continues every session; proactive research happens at phase boundaries only — keep it targeted, not generic. Don't over-do it: quality of proposals > volume.
+
+### Capability lives in the brain + hands, NOT the voice layer
+The three layers are independent: voice (ElevenLabs — ears/mouth), brain (Claude — decides), hands (`tools.py` + `delegate_task` — act on the machine). What Jarvis can do is set by brain + tool quality, both independent of how speech is handled. Local voice stacks feel "more powerful" but aren't — a local small-model brain is weaker than frontier Claude. Local's real advantages (cost, privacy, offline, latency) are voice-layer properties, and that layer is cleanly swappable. **Standing decision:** keep cloud ElevenLabs + cloud Claude brain through the north-star phases; a local-voice swap (faster-whisper + Ollama + Piper/XTTS + Silero VAD on Windows — NOT MLX, Mac-only) is a FUTURE option driven by cost/privacy, never a capability upgrade, never the brain. **Safety note:** "full machine control" local projects (e.g. Open Interpreter) get raw power by running arbitrary code — exactly the excessive-autonomy / unsafe-code-execution risk our guardrails prevent. For a voice-triggered agent, those guardrails are load-bearing.
 
 ### Explicit scope boundaries (what we are NOT building)
 These were considered and deliberately rejected during the architecture validation pass. A new session proposing any of these should be pushed back on.
