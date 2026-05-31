@@ -104,6 +104,7 @@ what just happened, treat it as a failure):
      that's in code but not in the dashboard is invisible to the agent; that gap must be visible.
    - If you notice a recurring gap, **improve the file's structure** too. You have full latitude.
 3. Commit everything with a clear message.
+4. If a git remote is configured, push after committing (backup). Never push if `.env` or any secret would be included — confirm `.gitignore` excludes them first.
 
 ## How to run
 - Activate venv → ensure `.env` is filled → `python main.py` → talk to the agent → Ctrl+C to stop.
