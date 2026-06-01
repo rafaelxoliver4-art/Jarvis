@@ -75,21 +75,32 @@ Phase 7    Polish (push-to-talk first; wake word deferred)
 
 ## 2. How we work — the operating model
 
-This project is built by a **two-Claude team with Rafael as the human bridge:**
+This project is built by a **three-part Claude team with Rafael as the human bridge:**
 
-- **Planning chat** (Claude.ai project, separate from this code session) =
-  **architect.** Researches, designs features, weighs decisions, writes the
-  build prompts Rafael pastes into Claude Code.
+- **Planning chat** (Claude.ai project) = **architect.** Researches, designs
+  features, weighs decisions, writes the build prompts Rafael pastes into
+  Claude Code.
 - **Claude Code** (in this repo) = **builder.** Implements, runs, debugs,
-  commits.
-- **Rafael** = **bridge + human-in-the-loop.** Carries `docs/PROGRESS.md`
-  between the two Claudes. Does the human-only steps: creating accounts,
-  handling API keys, the ElevenLabs dashboard, running commands, voice
-  testing, final approval calls.
+  commits/pushes.
+- **JARVIS Research** (separate Claude.ai project) = **researcher (sidecar).**
+  Does focused, current, web-sourced research (alpha-SDK behavior, library
+  choices, best practices, cost/security) and returns decision-ready proposals
+  (adopt / consider / reject). It **informs and adjusts** the plan; it does NOT
+  hijack the timeline or the build order.
+- **Rafael** = **bridge + decision-maker.** Carries `docs/PROGRESS.md` /
+  `CONTEXT.md` and research findings between all three; does the human-only
+  steps (accounts, API keys, the ElevenLabs dashboard, running commands, voice
+  testing); makes the final calls.
 
-The two Claudes **cannot talk directly.** Rafael manually carries
-`docs/PROGRESS.md` between them. **If anything ever conflicts with
-PROGRESS.md, PROGRESS.md wins.**
+The Claudes **cannot talk directly.** Rafael manually carries `docs/PROGRESS.md`
+(and findings) between them. **If anything ever conflicts with PROGRESS.md,
+PROGRESS.md wins.**
+
+**Claude Code can REQUEST a research pass.** When Code hits a question it can't
+safely answer from memory — alpha-SDK behavior, a library maintenance/security
+question, an "is there a better approach?" — it should flag it explicitly in
+its report as **"worth a research pass"** so Rafael can carry it to JARVIS
+Research. Code participates by *surfacing* these, not by guessing.
 
 ### Workflow per session
 
@@ -302,6 +313,7 @@ current phase*, mirror its essence here.
 
 ## 6. Update history
 
+- **2026-06-01** — **Operating model → three-part team.** Added **JARVIS Research** (separate Claude.ai project) as a researcher sidecar (decision-ready adopt/consider/reject proposals; informs the plan, doesn't hijack the build order) alongside the Planning chat (architect) and Claude Code (builder), with Rafael as bridge. Noted that Claude Code can REQUEST a research pass by flagging open questions as "worth a research pass." Mirrored in CLAUDE.md § Operating model.
 - **2026-06-01** — **Bounded-autonomy scope boundary added** to § Explicit scope boundaries: autonomous background operation is a future, BOUNDED-only backlog item (allow-lists + `./generated/` sandbox + `delegate_task` caps + `wrap_log`; never unattended irreversible actions) — reject any unbounded "roams free" framing (OWASP excessive-autonomy). Mirrors the new PROGRESS.md backlog entry. (PROGRESS.md also now carries the proposed Phase 5 v1 design, the resolved `claude-agent-sdk==0.2.87`-pin decision, and a read-only `tools.py`/`main.py` code-state snapshot for the build prompt.)
 - **2026-05-31** — **Phase 5 SDK probe re-run on the new machine.** Added a "Claude Agent SDK lessons" block to § 3: bundled CLI needs no system Node; `can_use_tool` is the secondary deny layer (`disallowed_tools` is primary, `PreToolUse` hook for total coverage); `load_dotenv(override=True)` so the real `ANTHROPIC_API_KEY` reaches the SDK subprocess; always verify against installed source on the actual machine. `claude-agent-sdk 0.2.87` now installed in the venv (unpinned until the Phase 5 build commit). Full probe detail in PROGRESS.md.
 - **2026-05-31** — **Private GitHub remote configured + first push LANDED + OneDrive-corrupts-git lesson.** Added the backup remote (`origin` → the private `rafaelxoliver4-art/Jarvis` repo) after a clean secret-safety pre-flight; first push (37 commits) confirmed up after Rafael completed GitHub auth. GitHub is now the backup of record. Recorded a new lesson in § Backups & recovery: OneDrive can corrupt `.git` internals (not just the venv) — `git config windows.appendAtomically false` fixed a failed commit — strengthening the case to eventually work from a clone OUTSIDE OneDrive. Detail in PROGRESS.md WIP.

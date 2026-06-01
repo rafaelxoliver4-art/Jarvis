@@ -23,15 +23,17 @@ tool hands off to an autonomous **Claude Agent SDK** loop.
 Read `docs/ARCHITECTURE.md` for the full design before making structural changes.
 
 ## Operating model — who does what (read every session)
-This project is built by a two-Claude team, with Rafael as the human bridge:
+This project is built by a three-part Claude team, with Rafael as the human bridge:
 - PLANNING CHAT (a separate Claude.ai project) = architect: researches, designs features, weighs decisions, resolves the open questions in PROGRESS.md, and writes the build prompts.
-- CLAUDE CODE (you, in this repo) = builder: implements, runs, debugs, and commits the code.
-- RAFAEL = bridge + human-in-the-loop: carries PROGRESS.md and context between the two Claudes, does the human-only steps (creating accounts, handling API keys, the ElevenLabs dashboard, running commands, granting permissions, voice testing), and makes the final approval calls.
+- CLAUDE CODE (you, in this repo) = builder: implements, runs, debugs, and commits/pushes the code.
+- JARVIS RESEARCH (a separate Claude.ai project) = researcher (sidecar): does focused, current, web-sourced research (alpha-SDK behavior, library choices, best practices, cost/security) and returns decision-ready proposals (adopt/consider/reject). It informs and adjusts the plan; it does NOT hijack the timeline or build order.
+- RAFAEL = bridge + human-in-the-loop: carries PROGRESS.md and context/findings between all three, does the human-only steps (creating accounts, handling API keys, the ElevenLabs dashboard, running commands, granting permissions, voice testing), and makes the final approval calls.
 
 How you work as a result:
 - Most build prompts Rafael pastes originate from the planning chat's design. Treat them as the architect's plan, but sanity-check each against the current code, the architecture, and the safety rules before building; flag anything wrong instead of executing blindly.
 - PROGRESS.md is the only channel between you and the planning chat — keep it pristine and its "Next action" self-contained for a zero-context reader.
 - Be proactive: do the heavy building, but explicitly surface when you need a DECISION from the planning chat (log it under Open questions) or an ACTION from Rafael (keys, dashboard registration, running/approving something). Don't stall silently; don't guess.
+- You can REQUEST a research pass: when you hit a question you can't safely answer from memory (alpha-SDK behavior, a library maintenance/security question, an "is there a better approach?"), flag it explicitly in your report as "worth a research pass" so Rafael can carry it to the JARVIS Research project. Surface these — don't guess.
 - Never do the human-only steps yourself: don't create accounts, don't read/print/transmit secrets, don't take irreversible actions without Rafael's explicit approval. Route those to Rafael.
 
 ## Stack
