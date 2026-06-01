@@ -22,7 +22,11 @@ from elevenlabs.conversational_ai.default_audio_interface import DefaultAudioInt
 # Our local capabilities (the "hands"). Defined and registered in tools.py.
 from tools import client_tools
 
-load_dotenv()
+# override=True: an empty ambient ANTHROPIC_API_KEY can shadow the real value in
+# .env, and Phase 5's delegate_task worker authenticates the SDK from the
+# environment. Forcing override ensures the real key (and AGENT_ID / ELEVENLABS
+# key) reach the process and any child workers. (Probe finding, 2026-05-31.)
+load_dotenv(override=True)
 
 AGENT_ID = os.getenv("AGENT_ID")
 ELEVENLABS_API_KEY = os.getenv("ELEVENLABS_API_KEY")

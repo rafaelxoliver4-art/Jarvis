@@ -12,6 +12,7 @@ ElevenLabs dashboard (matching name + description + parameters) or the agent can
 """
 
 import html
+import json
 import os
 import platform
 import subprocess
@@ -406,19 +407,103 @@ def get_system_info(parameters) -> str:
     return f"It's {time_str}.{bat_clause} CPU's at {cpu_pct}%, memory at {mem_pct}%, sir."
 
 
-def delegate_task(parameters) -> str:
-    """
-    Hand a complex, multi-step goal to an autonomous Claude Agent SDK loop.
+# --- delegate_task: launch the SDK loop in a KILLABLE worker process ---------
+# Phase 5 Stage 1 (the safety spine). The autonomous Claude Agent SDK loop runs
+# in a SEPARATE child process (agents/delegate_worker.py), NOT in this voice
+# process. That isolation is what makes the wall-clock timeout a real kill
+# switch: on timeout/crash we terminate the entire worker process tree (worker +
+# the SDK's bundled CLI subprocess) with psutil, so a hung SDK loop can't run on
+# for hours. The goal goes to the worker via STDIN JSON (never argv); the API
+# key flows via the inherited environment only.
 
-    STUB: implemented fully in the delegation phase (see docs/BUILD_GUIDE.md Phase 5).
-    When built, it must use ClaudeAgentOptions with an allowed_tools allow-list, a hard
-    max_turns cap, a timeout, and permission_mode that confirms destructive actions.
+_WORKER_TIMEOUT_SEC = 60     # HARD wall-clock cap for a delegated task
+_DELEGATE_SUMMARY_MAX = 300  # cap the voice readback length
+
+
+def _kill_process_tree(pid: int) -> None:
+    """Terminate a worker process AND all descendants (incl. the SDK CLI)."""
+    try:
+        parent = psutil.Process(pid)
+    except psutil.NoSuchProcess:
+        return
+    procs = parent.children(recursive=True)
+    procs.append(parent)
+    for p in procs:
+        try:
+            p.terminate()
+        except psutil.NoSuchProcess:
+            pass
+    gone, alive = psutil.wait_procs(procs, timeout=3)
+    for p in alive:
+        try:
+            p.kill()
+        except psutil.NoSuchProcess:
+            pass
+
+
+def delegate_task(parameters) -> str:
+    """Hand a complex, multi-step goal to an autonomous Claude Agent SDK loop.
+
+    SYNCHRONOUS by contract (the ElevenLabs SDK calls tools synchronously). It
+    runs the async SDK loop inside a child worker process and waits with a hard
+    timeout. Returns a SHORT voice-friendly summary — never the raw result.
     """
-    goal = parameters.get("goal") or ""
+    goal = (parameters.get("goal") or "").strip()
     if not goal:
         return "What would you like me to take on, sir?"
-    return ("I can't run autonomous tasks yet, sir — the delegation engine isn't built. "
-            "Add it per Phase 5 of the build guide.")
+
+    repo_root = os.path.dirname(os.path.abspath(__file__))
+    cmd = [sys.executable, "-m", "agents.delegate_worker"]
+    try:
+        proc = subprocess.Popen(
+            cmd,
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            cwd=repo_root,
+            env=os.environ.copy(),  # inherits ANTHROPIC_API_KEY (env-only)
+            text=True,
+            encoding="utf-8",
+        )
+    except Exception as exc:  # noqa: BLE001
+        print(f"[delegate_task] launch {type(exc).__name__}: {exc}", file=sys.stderr)
+        return "I couldn't start the task engine, sir."
+
+    payload = json.dumps({"goal": goal})
+    try:
+        out, err = proc.communicate(input=payload, timeout=_WORKER_TIMEOUT_SEC)
+    except subprocess.TimeoutExpired:
+        _kill_process_tree(proc.pid)
+        try:
+            proc.communicate(timeout=5)
+        except Exception:  # noqa: BLE001
+            pass
+        return "That task took too long, sir, so I stopped it. Try narrowing it down."
+    except Exception as exc:  # noqa: BLE001
+        _kill_process_tree(proc.pid)
+        print(f"[delegate_task] run {type(exc).__name__}: {exc}", file=sys.stderr)
+        return "Something went wrong while running that task, sir."
+
+    if proc.returncode != 0 or not out:
+        print(f"[delegate_task] worker rc={proc.returncode} "
+              f"stderr={(err or '')[:200]}", file=sys.stderr)
+        return "I couldn't complete that task, sir."
+
+    try:
+        result = json.loads(out.strip().splitlines()[-1])
+    except Exception as exc:  # noqa: BLE001
+        print(f"[delegate_task] parse {type(exc).__name__}: {exc}", file=sys.stderr)
+        return "I finished the task, sir, but couldn't read the result cleanly."
+
+    summary = (result.get("summary") or "").strip()
+    status = result.get("status") or "unknown"
+    if status != "completed":
+        if summary:
+            return summary[:_DELEGATE_SUMMARY_MAX]
+        return "I couldn't fully complete that task, sir."
+    if not summary:
+        return "I finished, sir, but there was nothing to report."
+    return summary[:_DELEGATE_SUMMARY_MAX]
 
 
 # ---------------------------------------------------------------------------
