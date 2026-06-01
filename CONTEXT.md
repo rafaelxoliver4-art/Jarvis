@@ -60,7 +60,9 @@ Phase 2    ✅ First real tool: open_application
 Phase 3    ✅ COMPLETE (2026-05-30) — All 5 core tools live-verified
            ✅ get_system_info, ✅ save_file, ✅ create_html_file,
            ✅ search_web, ✅ control_window
-Phase 5    ⭐ Reasoning & delegation (delegate_task via Claude Agent SDK) ← NEXT
+Phase 5    ⭐ Reasoning & delegation (delegate_task via Claude Agent SDK) ← IN PROGRESS
+           Stage 1 (safety spine) ✅ + Stage 2 (breakers + telemetry) ✅ built/verified
+           2026-06-01; remaining: ElevenLabs dashboard registration + voice test
 Phase 6    ⭐ Persistent memory (remember / recall)
 Phase 6.5  ⭐ Self-improvement loop (procedural memory, NOT runtime self-mod)
 Phase 4    Browser control (Playwright/MCP, deferred per north-star reorder)
@@ -210,6 +212,16 @@ For every new tool from Phase 2 onward:
 - **`load_dotenv(override=True)` when a key feeds a subprocess.** The SDK's CLI authenticates from the `ANTHROPIC_API_KEY` *environment variable*. An empty ambient var can shadow `.env` because `load_dotenv()` defaults to `override=False`. Use `override=True` (or otherwise guarantee the real key reaches the subprocess). `main.py` uses plain `load_dotenv()` — revisit when wiring Phase 5.
 - **Verify SDK behavior against the *installed source* on the *actual machine*, every time.** Alpha SDK churn + machine migration both invalidate prior probe results; the docs contradict the installed code in places. And detect tool *execution* by inspecting `ToolResultBlock` output — never by scanning a message's `repr()` for the command string (the agent's refusal repeats it → false positive).
 
+### `delegate_task` architecture — load-bearing design (Phase 5, built + verified 2026-06-01)
+These are the standing rules for how `delegate_task` (and any future SDK-loop tool) must be built. Don't weaken them without a deliberate, reviewed decision.
+- **Killable WORKER PROCESS, never in-process.** The SDK loop runs in a separate child process (`agents/delegate_worker.py`), launched by the synchronous `tools.delegate_task`. This gives a real wall-clock kill switch, a clean async→sync bridge, and SDK-crash isolation from the voice loop.
+- **The OUTER wall-clock timeout is authoritative.** `delegate_task` enforces a hard 60s `communicate` timeout and, on timeout/crash, kills the ENTIRE worker process tree with `psutil` (`children(recursive=True)` + parent → the SDK's bundled CLI grandchild). The SDK's own `max_turns`/`max_budget_usd` are inner guards; the process-tree kill is the backstop that can't be talked around.
+- **JARVIS-owned MCP tools ONLY (v1).** The agent gets exactly our four sandboxed tools (`search_web`, `save_file`, `create_html_file`, `get_system_info`) via an in-process SDK MCP server wrapping the existing `tools.py` functions. **NO SDK built-in `Read`/`WebFetch`/`WebSearch`** (and no `Bash`/`Write`/`Edit`/`Task`/agents/skills/plugins/MCP-discovery): `cwd` is NOT a security boundary (built-in `Read` can traverse to parent dirs → `.env`), and `WebFetch` widens prompt-injection exposure. All writes route through `_safe_path` → `./generated/`.
+- **Zero-ambient lockdown config.** `tools=[]` + `disallowed_tools=[...]` + `permission_mode="dontAsk"` + `setting_sources=[]` + `strict_mcp_config=True` + `skills=[]`/`agents=None`/`plugins=[]`, with a **PreToolUse hook as the primary runtime allowlist gate** (allow only the 4 exact `mcp__jarvis__*` names; deny everything else).
+- **Circuit breakers are per-delegation + task-local** (fresh state per run, threaded via closures — no globals): total-call cap, per-tool cap, no-repeat, consecutive-failure. Failures are counted in our tool wrappers (deterministic), not via `PostToolUseFailure`. Cap env-overrides are tightening-only.
+- **Telemetry is metadata-only + fail-open.** Log tool-call names+outcomes/counts/duration/cost/status — never raw tool outputs, the voice summary, full goal text, or any secret. Telemetry failure must never break the result or the timeout.
+- **Secrets via environment only.** The `ANTHROPIC_API_KEY` reaches the SDK subprocess through the inherited env (with `load_dotenv(override=True)`); never via argv or the stdin goal JSON.
+
 ### Known bugs (tracked in `docs/PROGRESS.md` → WIP)
 
 *(None currently. The `open_application` Chrome silent-lie was fixed and live-verified in the Phase 3 wrap commit `283d44b`, 2026-05-30.)*
@@ -313,6 +325,7 @@ current phase*, mirror its essence here.
 
 ## 6. Update history
 
+- **2026-06-01** — **Phase 5 `delegate_task` Stage 1 + Stage 2 built & verified.** Added the durable "`delegate_task` architecture — load-bearing design" block to § 3 (killable worker process; outer wall-clock timeout authoritative; JARVIS-owned MCP tools only — no built-in Read/WebFetch/WebSearch; zero-ambient lockdown; per-delegation task-local circuit breakers; metadata-only fail-open telemetry; secrets via env only). Phase overview marked Phase 5 IN PROGRESS. Full build/test detail + the dashboard-registration step live in PROGRESS.md.
 - **2026-06-01** — **Operating model → three-part team.** Added **JARVIS Research** (separate Claude.ai project) as a researcher sidecar (decision-ready adopt/consider/reject proposals; informs the plan, doesn't hijack the build order) alongside the Planning chat (architect) and Claude Code (builder), with Rafael as bridge. Noted that Claude Code can REQUEST a research pass by flagging open questions as "worth a research pass." Mirrored in CLAUDE.md § Operating model.
 - **2026-06-01** — **Bounded-autonomy scope boundary added** to § Explicit scope boundaries: autonomous background operation is a future, BOUNDED-only backlog item (allow-lists + `./generated/` sandbox + `delegate_task` caps + `wrap_log`; never unattended irreversible actions) — reject any unbounded "roams free" framing (OWASP excessive-autonomy). Mirrors the new PROGRESS.md backlog entry. (PROGRESS.md also now carries the proposed Phase 5 v1 design, the resolved `claude-agent-sdk==0.2.87`-pin decision, and a read-only `tools.py`/`main.py` code-state snapshot for the build prompt.)
 - **2026-05-31** — **Phase 5 SDK probe re-run on the new machine.** Added a "Claude Agent SDK lessons" block to § 3: bundled CLI needs no system Node; `can_use_tool` is the secondary deny layer (`disallowed_tools` is primary, `PreToolUse` hook for total coverage); `load_dotenv(override=True)` so the real `ANTHROPIC_API_KEY` reaches the SDK subprocess; always verify against installed source on the actual machine. `claude-agent-sdk 0.2.87` now installed in the venv (unpinned until the Phase 5 build commit). Full probe detail in PROGRESS.md.

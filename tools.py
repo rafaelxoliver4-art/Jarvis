@@ -420,6 +420,23 @@ _WORKER_TIMEOUT_SEC = 60     # HARD wall-clock cap for a delegated task
 _DELEGATE_SUMMARY_MAX = 300  # cap the voice readback length
 
 
+def _log_delegation(record: dict) -> None:
+    """Best-effort, fail-open, secrets-safe telemetry line for a delegation.
+
+    Writes ONE compact JSON line to logs/delegate_log.jsonl. Logs only metadata
+    (truncated goal, tool-call names+outcomes, counts, duration, cost, status) —
+    never raw tool outputs, never the voice summary, never .env/keys. Any error
+    here is swallowed so telemetry can NEVER break the result or the timeout.
+    """
+    try:
+        log_dir = os.path.join(os.path.dirname(__file__), "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        with open(os.path.join(log_dir, "delegate_log.jsonl"), "a", encoding="utf-8") as fh:
+            fh.write(json.dumps(record) + "\n")
+    except Exception:  # noqa: BLE001 — telemetry is never load-bearing
+        pass
+
+
 def _kill_process_tree(pid: int) -> None:
     """Terminate a worker process AND all descendants (incl. the SDK CLI)."""
     try:
@@ -470,6 +487,8 @@ def delegate_task(parameters) -> str:
         return "I couldn't start the task engine, sir."
 
     payload = json.dumps({"goal": goal})
+    goal_trunc = goal[:80]
+    ts = datetime.now().isoformat(timespec="seconds")
     try:
         out, err = proc.communicate(input=payload, timeout=_WORKER_TIMEOUT_SEC)
     except subprocess.TimeoutExpired:
@@ -478,32 +497,57 @@ def delegate_task(parameters) -> str:
             proc.communicate(timeout=5)
         except Exception:  # noqa: BLE001
             pass
+        _log_delegation({"ts": ts, "goal": goal_trunc, "status": "timeout",
+                         "duration_ms": _WORKER_TIMEOUT_SEC * 1000})
         return "That task took too long, sir, so I stopped it. Try narrowing it down."
     except Exception as exc:  # noqa: BLE001
         _kill_process_tree(proc.pid)
         print(f"[delegate_task] run {type(exc).__name__}: {exc}", file=sys.stderr)
+        _log_delegation({"ts": ts, "goal": goal_trunc, "status": "error"})
         return "Something went wrong while running that task, sir."
 
     if proc.returncode != 0 or not out:
         print(f"[delegate_task] worker rc={proc.returncode} "
               f"stderr={(err or '')[:200]}", file=sys.stderr)
+        _log_delegation({"ts": ts, "goal": goal_trunc, "status": "error",
+                         "rc": proc.returncode})
         return "I couldn't complete that task, sir."
 
     try:
         result = json.loads(out.strip().splitlines()[-1])
     except Exception as exc:  # noqa: BLE001
         print(f"[delegate_task] parse {type(exc).__name__}: {exc}", file=sys.stderr)
+        _log_delegation({"ts": ts, "goal": goal_trunc, "status": "error",
+                         "note": "unparseable worker output"})
         return "I finished the task, sir, but couldn't read the result cleanly."
 
-    summary = (result.get("summary") or "").strip()
     status = result.get("status") or "unknown"
-    if status != "completed":
-        if summary:
-            return summary[:_DELEGATE_SUMMARY_MAX]
-        return "I couldn't fully complete that task, sir."
-    if not summary:
+    summary = (result.get("summary") or "").strip()
+
+    # Compact telemetry: metadata only (NO raw outputs, NO summary, NO secrets).
+    _log_delegation({
+        "ts": ts,
+        "goal": goal_trunc,
+        "status": status,
+        "turns": result.get("turns"),
+        "total_tool_calls": result.get("total_tool_calls"),
+        "tool_calls": result.get("tool_calls"),
+        "duration_ms": result.get("duration_ms"),
+        "estimated_cost_usd": result.get("estimated_cost_usd"),
+        "stop_reason": result.get("stop_reason"),
+        "session_id": result.get("session_id"),
+    })
+
+    # Voice readback: short summary, or a status-appropriate fallback.
+    if summary:
+        return summary[:_DELEGATE_SUMMARY_MAX]
+    if status == "success":
         return "I finished, sir, but there was nothing to report."
-    return summary[:_DELEGATE_SUMMARY_MAX]
+    if status == "blocked":
+        return "I had to stop that task early, sir, to stay within safe limits."
+    if status in ("max_turns", "max_budget"):
+        return "I reached my limit on that task, sir, and stopped."
+    return "I couldn't fully complete that task, sir."
 
 
 # ---------------------------------------------------------------------------
