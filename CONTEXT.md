@@ -187,6 +187,19 @@ For every new tool from Phase 2 onward:
   `main.py` from a non-interactive shell. Without it, prints get
   block-buffered and "JARVIS is listening" never appears in captured logs.
   For Rafael's own TTY runs this isn't needed.
+- **Cleaning up an orchestrated test: kill ONLY the launched PID's own tree,
+  never by process name.** Capture the `main.py` PID and terminate
+  `psutil.Process(pid).children(recursive=True) + [parent]`. Do NOT match
+  processes by the name `claude`/`python` globally — on Windows the Claude Code
+  / Claude Desktop environment runs its own `claude.exe` processes, and a
+  name-based sweep will kill them. (Learned 2026-06-01: an over-broad orphan
+  cleanup killed 6 unrelated `claude.exe`.)
+- **The ElevenLabs free tier is a recurring hard wall for voice tests.** A
+  `1002 "exceeds your quota limit"` closes the WebSocket — often within ~1s of
+  the greeting, before any user turn. When a voice test produces no user
+  transcript, check the captured log for `1002` FIRST: if present, it's the
+  quota wall (not the mic, not the tool). A paid tier (Starter $5) is a
+  prerequisite for any non-trivial voice test.
 - **`wrap_log` design contracts:** thread-safe (module-level
   `threading.Lock`); fail-open (logging errors swallowed); secrets-safe
   (substring redaction on params with key names matching `key`, `token`,
@@ -325,6 +338,7 @@ current phase*, mirror its essence here.
 
 ## 6. Update history
 
+- **2026-06-01** — **First `delegate_task` voice test attempted — blocked by ElevenLabs quota (1002).** No code issue: agent connected + greeted, then the session 1002'd before any user turn, so `delegate_task` never ran. Added two standing rules to § 3 Code patterns: (1) clean up orchestrated tests by killing only the launched PID's own process tree, never by `claude`/`python` name (learned from an over-broad cleanup that killed unrelated `claude.exe`); (2) the ElevenLabs free tier is a recurring hard wall — check captured logs for `1002` first when a voice test yields no transcript. Detail in PROGRESS.md WIP.
 - **2026-06-01** — **Phase 5 `delegate_task` Stage 1 + Stage 2 built & verified.** Added the durable "`delegate_task` architecture — load-bearing design" block to § 3 (killable worker process; outer wall-clock timeout authoritative; JARVIS-owned MCP tools only — no built-in Read/WebFetch/WebSearch; zero-ambient lockdown; per-delegation task-local circuit breakers; metadata-only fail-open telemetry; secrets via env only). Phase overview marked Phase 5 IN PROGRESS. Full build/test detail + the dashboard-registration step live in PROGRESS.md.
 - **2026-06-01** — **Operating model → three-part team.** Added **JARVIS Research** (separate Claude.ai project) as a researcher sidecar (decision-ready adopt/consider/reject proposals; informs the plan, doesn't hijack the build order) alongside the Planning chat (architect) and Claude Code (builder), with Rafael as bridge. Noted that Claude Code can REQUEST a research pass by flagging open questions as "worth a research pass." Mirrored in CLAUDE.md § Operating model.
 - **2026-06-01** — **Bounded-autonomy scope boundary added** to § Explicit scope boundaries: autonomous background operation is a future, BOUNDED-only backlog item (allow-lists + `./generated/` sandbox + `delegate_task` caps + `wrap_log`; never unattended irreversible actions) — reject any unbounded "roams free" framing (OWASP excessive-autonomy). Mirrors the new PROGRESS.md backlog entry. (PROGRESS.md also now carries the proposed Phase 5 v1 design, the resolved `claude-agent-sdk==0.2.87`-pin decision, and a read-only `tools.py`/`main.py` code-state snapshot for the build prompt.)
