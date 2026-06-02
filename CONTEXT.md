@@ -60,9 +60,9 @@ Phase 2    ✅ First real tool: open_application
 Phase 3    ✅ COMPLETE (2026-05-30) — All 5 core tools live-verified
            ✅ get_system_info, ✅ save_file, ✅ create_html_file,
            ✅ search_web, ✅ control_window
-Phase 5    ⭐ Reasoning & delegation (delegate_task via Claude Agent SDK) ← IN PROGRESS
-           Stage 1 (safety spine) ✅ + Stage 2 (breakers + telemetry) ✅ built/verified
-           2026-06-01; remaining: ElevenLabs dashboard registration + voice test
+Phase 5    ✅ COMPLETE (2026-06-01) — delegate_task LIVE-VERIFIED end-to-end via voice
+           (Stage 1 spine + Stage 2 breakers/telemetry + 110s timeout + concurrency guard).
+           North-star first brick shipped. ← Phase 6 (memory) is NEXT
 Phase 6    ⭐ Persistent memory (remember / recall)
 Phase 6.5  ⭐ Self-improvement loop (procedural memory, NOT runtime self-mod)
 Phase 4    Browser control (Playwright/MCP, deferred per north-star reorder)
@@ -342,6 +342,7 @@ current phase*, mirror its essence here.
 
 ## 6. Update history
 
+- **2026-06-01** — **⭐ Phase 5 COMPLETE: `delegate_task` live-verified end-to-end via VOICE (test #5).** With the 110s timeout + concurrency guard, a spoken multi-step goal routed to `delegate_task`, the worker ran search_web+save_file under the lockdown, completed in 98s, and saved a real reasoned recommendation file. The concurrency guard fired (busy return) when Rafael spoke mid-run. Marked Phase 5 ✅ in the phase overview; next is Phase 6 (memory). Two non-bug observations worth keeping: speech-to-text can mangle filenames (the agent faithfully saves what it heard); and live mid-run check-ins still interrupt the agent even with headphones (echo gone, impatience isn't) — speak the goal once then stay silent.
 - **2026-06-01** — **Voice test #4: `delegate_task` works end-to-end; only the 60s parent timeout was too short.** After attaching the tool to the agent, routing works (agent routed the multi-step goal to `delegate_task`); a code-side worker run completed the same goal in 93.6s with a real reasoned `notes_apps.md`. Added a standing rule to § `delegate_task` architecture: a real multi-step delegation takes ~90s, so size the timeouts as real(~90s) < parent `_WORKER_TIMEOUT_SEC`(~110–120s) < dashboard Response timeout(~150s). Next build raises those. Detail in PROGRESS.md.
 - **2026-06-01** — **Voice test #3 (routing re-test): the agent doesn't HAVE `delegate_task`.** The agent explicitly said it has no delegate-task tool, so the dashboard registration didn't attach it to the agent (created ≠ added-to-agent). Logs: 10× `search_web` (all ok), no `save_file`, no `delegate_task`, `notes_apps.md` not created; severe echo loop. Added standing rules to § `delegate_task` architecture: created-tool ≠ agent-has-tool (ask Jarvis its toolset to verify); trust `usage_log` outcomes over Jarvis's spoken claims; headphones are a hard blocker for delegation voice tests. The routing/description open-question is on hold until the tool is actually attached. Detail in PROGRESS.md WIP.
 - **2026-06-01** — **Voice test #2: round-trip worked, but the agent didn't choose `delegate_task`.** Mic + quota confirmed working; Jarvis heard Rafael and ran real `search_web`+`save_file` directly, saving `focus-tips.txt` — but `delegate_task` (registered, working) was never invoked. Added a standing rule to the § `delegate_task` architecture block: a registered tool isn't an invoked one; routing to `delegate_task` is a prompt/description-design problem, and you must verify the actually-fired tool via the logs, not Jarvis's spoken claim. Detail + the routing open-question in PROGRESS.md.
