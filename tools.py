@@ -17,6 +17,7 @@ import os
 import platform
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime
 
@@ -416,8 +417,19 @@ def get_system_info(parameters) -> str:
 # for hours. The goal goes to the worker via STDIN JSON (never argv); the API
 # key flows via the inherited environment only.
 
-_WORKER_TIMEOUT_SEC = 60     # HARD wall-clock cap for a delegated task
+# Nesting invariant: real delegation completion (~90s, measured in voice-test #4)
+#   < _WORKER_TIMEOUT_SEC (115s — the parent's HARD wall-clock kill on the worker tree)
+#   < ElevenLabs dashboard "Response timeout" (150s — Rafael sets this separately).
+# The SDK inner guards (max_turns=5, max_budget_usd=0.50, API_TIMEOUT_MS,
+# CLAUDE_CODE_MAX_RETRIES) are UNCHANGED — they still bound the worker; this only
+# gives the wall-clock kill enough room for a healthy run to finish.
+_WORKER_TIMEOUT_SEC = 115    # HARD wall-clock cap for a delegated task
 _DELEGATE_SUMMARY_MAX = 300  # cap the voice readback length
+
+# Concurrency guard: only ONE delegation runs at a time. The ElevenLabs SDK calls
+# tools synchronously, so a non-blocking lock is enough; it stops the echo loop /
+# impatient repeats from stacking concurrent workers and burning budget.
+_delegate_lock = threading.Lock()
 
 
 def _log_delegation(record: dict) -> None:
@@ -464,11 +476,30 @@ def delegate_task(parameters) -> str:
     SYNCHRONOUS by contract (the ElevenLabs SDK calls tools synchronously). It
     runs the async SDK loop inside a child worker process and waits with a hard
     timeout. Returns a SHORT voice-friendly summary — never the raw result.
+
+    Concurrency-guarded: only one delegation runs at a time. A second call while
+    one is in flight returns a short "busy" string instead of spawning another
+    worker (prevents the echo loop / impatient repeats from stacking workers and
+    burning budget). The flag is released in a finally so a crash can't stick it
+    "busy" forever.
     """
     goal = (parameters.get("goal") or "").strip()
     if not goal:
         return "What would you like me to take on, sir?"
 
+    if not _delegate_lock.acquire(blocking=False):
+        return "I'm still working on the previous task, sir — one moment."
+    try:
+        return _run_delegation(goal)
+    finally:
+        _delegate_lock.release()  # always release, even on crash → never stuck "busy"
+
+
+def _run_delegation(goal: str) -> str:
+    """Spawn the worker process, enforce the hard wall-clock timeout, and return a
+    short voice string. (Body unchanged from the original delegate_task — the
+    safety spine, process-tree kill, circuit breakers, and telemetry are intact.)
+    """
     repo_root = os.path.dirname(os.path.abspath(__file__))
     cmd = [sys.executable, "-m", "agents.delegate_worker"]
     try:
