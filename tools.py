@@ -417,13 +417,16 @@ def get_system_info(parameters) -> str:
 # for hours. The goal goes to the worker via STDIN JSON (never argv); the API
 # key flows via the inherited environment only.
 
-# Nesting invariant: real delegation completion (~90s, measured in voice-test #4)
-#   < _WORKER_TIMEOUT_SEC (115s — the parent's HARD wall-clock kill on the worker tree)
-#   < ElevenLabs dashboard "Response timeout" (150s — Rafael sets this separately).
+# Nesting invariant: real delegation completion (~90–94s, measured in voice-test #4)
+#   < _WORKER_TIMEOUT_SEC (110s — the parent's HARD wall-clock kill on the worker tree)
+#   < ElevenLabs dashboard "Response timeout" (120s — the ElevenLabs MAX; Rafael set it).
+# Why 110 not 115/120: on the TIMEOUT path the parent runs the full window AND then
+# spends ~3–5s tearing down the worker process tree before it returns, so its
+# worst-case return is ~110+5 ≈ 115s — safely under the dashboard's hard 120s cap.
 # The SDK inner guards (max_turns=5, max_budget_usd=0.50, API_TIMEOUT_MS,
 # CLAUDE_CODE_MAX_RETRIES) are UNCHANGED — they still bound the worker; this only
-# gives the wall-clock kill enough room for a healthy run to finish.
-_WORKER_TIMEOUT_SEC = 115    # HARD wall-clock cap for a delegated task
+# gives the wall-clock kill enough room for a healthy run (~94s) to finish.
+_WORKER_TIMEOUT_SEC = 110    # HARD wall-clock cap for a delegated task
 _DELEGATE_SUMMARY_MAX = 300  # cap the voice readback length
 
 # Concurrency guard: only ONE delegation runs at a time. The ElevenLabs SDK calls
