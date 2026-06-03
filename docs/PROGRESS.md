@@ -20,7 +20,7 @@
 - **Next action: Phase 6 — persistent memory (`remember` / `recall`).** Phase 5 is ✅ COMPLETE (delegate_task live-verified via voice 2026-06-01). Phase 6 is the next ⭐ north-star phase: a local JSON-Lines memory store loaded at session start (see roadmap + Decision log 2026-05-25 for the v1 format). **Needs a planning-chat entry prompt** to design the schema + the `remember`/`recall` tools before building. *(Optional Phase-5 polish, non-blocking, can fold into a later pass: interim "still working, sir" feedback during the ~90s delegation; a guard/awareness for the 2 `main.py` PIDs the launch shows; the speech-to-text filename quirk is a voice-input artifact, not a bug.)*
 - **Env status (2026-06-01):** venv on **Python 3.12.10** (`C:\Users\rafae\AppData\Local\Programs\Python\Python312`). Installed + pinned in `requirements.txt`: `elevenlabs[pyaudio]==2.49.0`, `python-dotenv==1.2.2`, `psutil==7.2.2`, `ddgs==9.14.4`, `pywinctl==0.4.01` (+ `pywin32==311`, `pyaudio==0.2.14` transitive), and **`claude-agent-sdk==0.2.87` (PINNED at the Stage 1 build commit)**. pip 26.1.2. `.env` intact — `ANTHROPIC_API_KEY` real (108 chars, `sk-ant-`), `.gitignore` excludes it.
 - **Repo:** `C:\Users\rafae\OneDrive\Área de Trabalho\Jarvis\` (note: new machine, lowercase `rafae`) · branch `main` · run `git log --oneline` for the commit trail. **Remote (2026-05-31):** `origin` → `https://github.com/rafaelxoliver4-art/Jarvis.git` (PRIVATE). Secret-safety pre-flight passed (`.env` never tracked, never in history, gitignored). **✅ FIRST PUSH LANDED** — after Rafael completed GitHub auth, a fresh `git push -u origin main` succeeded; `origin/main` exists, upstream tracking set (`## main...origin/main`), local == remote. **Going forward: commit AND push at the end of every session** (CLAUDE.md ritual) — `.env`/secrets stay out via `.gitignore`.
-- **Open questions:** **1 for the planning chat** — `claude-agent-sdk 0.2.87` is now installed (probe) but still unpinned in `requirements.txt`; planning chat to confirm pin version/timing (lean: pin `==0.2.87` at the Phase 5 build commit). See "Open questions" below.
+- **Open questions:** none blocking — the `claude-agent-sdk` pin question is RESOLVED (pinned `==0.2.87`). The next item for the planning chat is the **Phase 6 design pass** (memory schema + `remember`/`recall` tools), not an open question. See "Open questions" below.
 
 ---
 
@@ -33,21 +33,19 @@ A voice-controlled agentic personal assistant that runs on Rafael's Windows mach
 
 ## ⏭️ Next action
 
-**Register `delegate_task` in the ElevenLabs dashboard, then run the first voice test.** Phase 5 `delegate_task` is **built and code-side-verified** — Stage 1 (safety spine: killable worker + 60s tree-kill + 4-tool MCP lockdown + PreToolUse allowlist hook) AND Stage 2 (circuit breakers + telemetry) are both done (2026-06-01). No more code is needed before the voice test.
-1. **Rafael:** register the tool in the dashboard — exact text in **"Open loops / awaiting Rafael"** below (Wait-for-response ON, Response timeout 90s). Also: headphones + ElevenLabs quota ($5 Starter) before the voice test.
-2. **Then:** the first voice test of `delegate_task` (start code-side / direct-invocation is already green; the voice test is the live end-to-end check).
-3. After the voice test passes → Phase 5 ✅ COMPLETE → on to **Phase 6** (persistent memory) per the roadmap.
+**Phase 6 — persistent memory (`remember` / `recall`).** Phase 5 is ✅ COMPLETE (`delegate_task` live-verified end-to-end via voice, test #5, 2026-06-01). The single Next action is a **planning-chat design pass for Phase 6 first** — design the memory schema + the `remember`/`recall` tools (v1 store = append-only JSON Lines, loaded at session start; see Decision log 2026-05-25), informed by a **phase-boundary research pass** (current agent-memory patterns / best practices). **No Phase 6 code until that design lands.**
 
-### Phase 5 prerequisites (status after the 2026-05-31 NEW-MACHINE probe)
-1. ✅ **`ANTHROPIC_API_KEY` is real** in `.env` (108 chars, `sk-ant-`, not placeholder). ⚠️ But the CLI reads the key from the **environment**, and this session had an **empty ambient `ANTHROPIC_API_KEY` shadowing `.env`** — fix with `load_dotenv(override=True)` (see probe re-run findings). Phase 5 code must guarantee the real key reaches the SDK subprocess.
-2. ✅ **`claude-agent-sdk 0.2.87` IS installed on the new PC** (during the 2026-05-31 probe). **Node.js is NOT on PATH — and is NOT needed**: the SDK ships a working **bundled CLI** that ran without any system Node (verified — Test A returned `4`). **NOT pinned in `requirements.txt` yet** — pin `==0.2.87` at the Phase 5 build commit.
-3. 🔧 **Design the SDK allow-list / deny-by-default** — verified on this machine: `disallowed_tools` removes a tool from the model's context entirely (primary, config-layer block — agent never even attempts it). `can_use_tool` is a **secondary** callback that **only fires when a tool call reaches an "ask"** — it is NOT called for tools already allowed/denied or removed via `disallowed_tools` (confirmed: 0 invocations in the lockdown test), and it **requires a streaming-mode prompt** (`AsyncIterable[dict]`, not `str`). **For total per-call coverage, use a `PreToolUse` hook** (it sees every tool call regardless of permission rules). Defense in depth = `disallowed_tools` (hard block) + `can_use_tool` (nuanced gating) + optionally a `PreToolUse` hook (observe/gate everything). Recommended initial `allowed_tools`: only `search_web`, `save_file`, `create_html_file`, `get_system_info` (read-mostly, no system mutation). Explicitly **exclude**: `open_application`, `control_window`, `delegate_task` itself (no recursion), and the built-in Claude-Code tools the SDK auto-exposes (`Bash`, `Write`, `Edit`, `Task`, `Glob`, `Grep`, `Read`, …). Note: `tools=[]` is a newer hard lever that disables ALL built-in tools at once.
-4. 🔧 **Set `max_turns` cap** — recommend 5–8 for v1.
-5. 🔧 **Set per-task timeout** — recommend 30–60s. Critical: this MUST be less than the dashboard "Response timeout" for `delegate_task` — bump that to 60–90s at registration time.
-6. 🔧 **Audio fix first** — autonomous loops produce long responses; the echo loop will be much worse here than in any Phase 3 tool. Headphones recommended before the first voice test. Plus: ElevenLabs free-tier quota is exhausted (WIP) — top up Starter ($5/mo) before voice testing.
+### Phase 5 prerequisites — ✅ ALL MET (Phase 5 COMPLETE; kept for history)
+> Every prerequisite was met and every design decision implemented + live-verified (voice test #5, 2026-06-01). For the as-built design, see the Done log + Decision log (2026-06-01 entries). Summary of how each landed (the original pre-build "pending/NOT-pinned" detail was removed here because it now contradicts the shipped state):
+- ✅ Real `ANTHROPIC_API_KEY` reaches the SDK subprocess via `load_dotenv(override=True)` (main.py + worker).
+- ✅ `claude-agent-sdk==0.2.87` **PINNED** in `requirements.txt` (Stage 1 commit). Node not needed (bundled CLI).
+- ✅ Deny-by-default lockdown built: `tools=[]` + `disallowed_tools` + `permission_mode="dontAsk"` + `setting_sources=[]` + `strict_mcp_config=True` + a `PreToolUse` allowlist hook; tool surface = our 4 sandboxed MCP tools only.
+- ✅ `max_turns=5`, `max_budget_usd=0.50`; `_WORKER_TIMEOUT_SEC=110s` < dashboard "Response timeout" 120s.
+- ✅ Audio (headphones) + ElevenLabs quota resolved for the live test.
 
-### Phase 5 — current code state (read-only snapshot for the build prompt, 2026-06-01)
-Exact facts the planning chat should write the Phase 5 build prompt against (verified by reading `tools.py` + `main.py`; nothing was changed):
+### Phase 5 — code-state snapshot (HISTORICAL — captured pre-build for the build prompt; Phase 5 is now COMPLETE)
+> ⚠️ Historical reference only. This snapshot described the code BEFORE Phase 5 was built; statements like "registration pending" / "no `claude_agent_sdk` import yet" / "`load_dotenv()` not override" are all now SUPERSEDED (the tool is built, registered, live-verified). Kept to show the starting point.
+Exact facts the snapshot captured (verified by reading `tools.py` + `main.py` at the time; nothing was changed then):
 - **`delegate_task` already EXISTS as a stub AND is already registered + `wrap_log`-wrapped** in `tools.py` (`client_tools.register("delegate_task", wrap_log(delegate_task))`). So the build *replaces the stub body* — no new registration line, no dashboard re-add of the tool name needed (dashboard registration of `delegate_task` itself is still pending separately).
 - **Tool shape (all 7 follow it):** `def name(parameters) -> str:` — **synchronous**, takes ONE `parameters` dict, reads `parameters.get(...)`, returns a SHORT voice string. `delegate_task` reads `parameters.get("goal")`. The ElevenLabs SDK calls handlers **synchronously**, so `delegate_task` must run the SDK's **async `query()` internally** (e.g. `asyncio.run(...)` or a worker thread) and return a string.
 - **No `claude_agent_sdk` import yet** in `tools.py` (imports: `html, os, platform, subprocess, sys, time, datetime, psutil, pywinctl, ddgs.DDGS, elevenlabs...ClientTools, tool_logging.wrap_log`). The SDK is installed in the venv but unreferenced in code.
@@ -55,7 +53,7 @@ Exact facts the planning chat should write the Phase 5 build prompt against (ver
 - **`main.py` uses plain `load_dotenv()` (NO `override=True`)** at module level — this is the exact line the probe flagged (empty ambient `ANTHROPIC_API_KEY` shadows `.env`). Phase 5 must address so the real key reaches the SDK subprocess. `main.py` is otherwise a synchronous callback model (`Conversation(...)` + `start_session()`/`wait_for_session_end()`), `from tools import client_tools` is its only business-logic import — **no asyncio loop in `main.py`** (reinforces: run async `query()` inside `delegate_task`).
 - **Files present** (root): `main.py, tools.py, tool_logging.py, requirements.txt, .env, .env.example, .gitignore, CLAUDE.md, CONTEXT.md, README.md, JARVIS_KICKOFF.md` + dirs `generated/ logs/ venv/ docs/`. (`docs/`: `ARCHITECTURE.md, BUILD_GUIDE.md, CAPABILITIES.md, PROGRESS.md, PROMPT_LIBRARY.md`.)
 
-### Phase 5 probe results — verified empirically 2026-05-30 (throwaway scratch script, no code committed)
+### Phase 5 probe results — verified empirically 2026-05-30/31 (HISTORICAL reference; Phase 5 is now COMPLETE)
 > ✅ **OLD-MACHINE RESULTS — now RE-CONFIRMED on the new PC (2026-05-31).** The findings below were first measured on the OLD PC; the 2026-05-31 re-run on the new machine reproduced the load-bearing ones (SDK 0.2.87, no init-hang, Test A passes, Bash lockdown blocks via `disallowed_tools`, `can_use_tool` secondary/never-fired). See the **"NEW-MACHINE re-run addendum (2026-05-31)"** right below this list for the verified-on-this-PC deltas (esp. Node-not-needed and the `load_dotenv(override=True)` gotcha). Cost/latency numbers below are old-PC figures (not re-measured) — treat as ballpark.
 
 Direct facts the planning chat should design Phase 5 against. The SDK is alpha and the docs contradict the installed code in places — these are the installed-version facts.
@@ -135,20 +133,17 @@ All five tools built one at a time per CLAUDE.md working style. The Phase-2 roun
 ---
 
 ## 📋 Open loops / awaiting Rafael
-- ✅ **`delegate_task` is now attached to the agent** (Rafael published it; voice test #4 confirmed the agent routes to it). 
-- ✅ **Dashboard "Response timeout" for `delegate_task` set to 120s** (the ElevenLabs MAX; Rafael, 2026-06-01). Code-side `_WORKER_TIMEOUT_SEC` adjusted to **110s** so the parent's worst-case (incl. ~5s teardown) stays under the 120s cap. Invariant: real ~94s < 110s < 120s.
-- ⛔ **Headphones — now a hard requirement for voice tests.** The audio echo loop (Jarvis hearing its own speech) wrecked test #3: 10 redundant `search_web` calls + self-interruption + Jarvis misreporting working tools as "failing." Without headphones, long delegation tests are unreadable.
-- ✅ **ElevenLabs quota** — appears topped up / available (no `1002` in voice test #2). Keep an eye on burn during long delegation tests.
-- **Still recommended before the next voice test:** **headphones** — the audio echo loop (Jarvis transcribing its own speech as "You:" lines) muddied test #2's transcript; it'll be worse on a long real delegation reply.
-- **Harden the Windows Firewall for `python.exe`: narrow Public → Private** (carried over).
-- **Harden the Windows Firewall for `python.exe`: narrow Public → Private.** When `main.py` first ran, Windows likely allowed Python on all profiles; narrow it to Private-only.
+*(Phase-5 items — `delegate_task` dashboard registration, the 120s Response timeout, quota top-up, and the voice test — are all DONE; see the Done log + Tools table.)*
+- **Harden the Windows Firewall for `python.exe`: narrow Public → Private.** When `main.py` first ran, Windows likely allowed Python on all profiles; narrow it to Private-only. (Carried over; non-urgent.)
+- **For any future voice test: use headphones, and speak the request once then stay silent.** The echo loop AND live mid-run check-ins both interrupt the agent; the concurrency guard backstops accidental duplicate `delegate_task` calls but a clean run needs quiet.
 
 ## 🅿️ Parked / deferred (with revisit trigger)
-- **Codex independent lockdown review** → revisit AFTER Stage 2 (now) — a second, independent pair of eyes on the `delegate_task` lockdown before the voice test / wider use.
+- **Phase-5 UX polish: interim "still working, sir" voice feedback** during the ~90s delegation (so the user isn't met with ~90s of silence) → fold into a later polish pass; non-blocking. (Also consider a brief awareness of the 2 `main.py`-matching PIDs the launch shows.)
+- **Codex independent lockdown review** → optional, anytime — a second, independent pair of eyes on the `delegate_task` lockdown.
+- **Voice-cost / local-stack research** (ElevenLabs vs alternatives pricing/latency) → run anytime; low urgency.
 - **"Council" (multi-model deliberation)** → only for genuinely high-stakes / irreversible decisions; not routine.
 - **VS Code agents / IDE agent integrations** → ignore unless a concrete need appears.
 - **Global (user-level) `CLAUDE.md`** → revisit between phases, not mid-build.
-- **Voice-cost research** (ElevenLabs vs alternatives pricing) → anytime; low urgency.
 - **Local-voice swap, cinematic "JARVIS orb" UI, autonomous background operation** → future phases only (see Backlog + CONTEXT scope boundaries; autonomous-bg is BOUNDED-only and post-5/6/6.5).
 
 ## 🔧 Known issues / WIP
@@ -210,9 +205,9 @@ Build order: **`1 → 1.5 → 2 → 3 → 5 → 6 → 6.5 → 4 → 7`**. Compou
 ---
 
 ## ❓ Open questions for the planning chat
-- **2026-06-01 — Routing question is ON HOLD (blocked by a more basic issue).** It originally asked how to make the agent *prefer* `delegate_task` over primitives. Voice test #3 revealed the agent doesn't HAVE the tool in its toolkit at all (see WIP), so routing/description tuning is premature. **Revisit only AFTER** Rafael attaches `delegate_task` to the agent and a re-test confirms the agent can actually call it. If, once it's attached, the agent *still* inlines primitives, then the routing levers apply (sharper description already done; add a system-prompt steering line; possibly a research pass on voice→sub-agent routing).
-- ✅ **RESOLVED 2026-05-31 — `claude-agent-sdk` pin.** Decision: **pin `claude-agent-sdk==0.2.87` in `requirements.txt` AT the Phase 5 build commit (not before).** The 2026-05-31 new-machine probe installed `0.2.87` into the venv (verified working: bundled CLI runs without Node, Test A passes, lockdown blocks). Until the build commit, the venv intentionally carries the SDK while `requirements.txt` stays unpinned. No further input needed.
-- _None open._
+- **➡️ NEXT (not an open question — a design request): Phase 6 memory design pass.** Phase 5 is ✅ COMPLETE. The planning chat's next deliverable is the **Phase 6 design** (memory `.jsonl` schema + `remember`/`recall` tools, loaded at session start), informed by a phase-boundary research pass on current agent-memory patterns. See the Next action + roadmap.
+- ✅ **RESOLVED 2026-06-01 — `delegate_task` routing.** The agent didn't use `delegate_task` until it was actually *attached to the agent* in the dashboard (created ≠ attached). Once attached (+ sharper description), it routed a multi-step goal correctly (voice test #5). No further input needed.
+- ✅ **RESOLVED 2026-05-31 — `claude-agent-sdk` pin.** Pinned `claude-agent-sdk==0.2.87` in `requirements.txt` at the Stage 1 build commit. No further input needed.
 
 ---
 
