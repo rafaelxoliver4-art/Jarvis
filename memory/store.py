@@ -17,13 +17,18 @@ Design (from the 2026-06-02 research pass):
 Generated IN CODE (never trusted from the caller): id, timestamps, review_status,
 source, op, schema_version.
 
-Stage 2 (NOT here): checksum_sha256 integrity, file locking, op=upsert/revoke
-tombstoning + supersedes handling, malformed/invalid safe-skip beyond basic
-JSON-parse skipping, and dedupe.
+Stage 2 (BUILT, slim scope, 2026-06-02): op="revoke" tombstoning via the `forget`
+tool, supersedes_id honored if present (loader/recall exclude superseded facts),
+malformed-line safe-skip (parse + light schema gate, with stderr breadcrumb), and
+write-time dedupe in remember. A revoke is a TOMBSTONE in an append-only log —
+the original line is NOT physically deleted, so forget is reversible/auditable.
+DEFERRED (Stage 2.5; revisit when we add concurrent/multi-process writers):
+checksum_sha256 integrity + file locking.
 """
 import json
 import os
 import re
+import sys
 import threading
 import uuid
 from datetime import datetime, timezone
@@ -199,6 +204,31 @@ def _build_reflection_record(content: str, tags=None, session_id=None) -> dict:
     }
 
 
+def _normalize_content(c) -> str:
+    """Lowercased, whitespace-collapsed content — for exact-match dedupe."""
+    return " ".join((c or "").lower().split())
+
+
+def _is_valid_record(rec) -> bool:
+    """Light schema gate for safe-skip. True if the record has the core fields
+    with the right primitive types. Deliberately minimal — enough to reject
+    garbage lines without coupling to the full schema."""
+    if not isinstance(rec, dict):
+        return False
+    if not isinstance(rec.get("id"), str) or not rec.get("id"):
+        return False
+    if not isinstance(rec.get("type"), str):
+        return False
+    if not isinstance(rec.get("op"), str):
+        return False
+    if not isinstance(rec.get("review_status"), str):
+        return False
+    c = rec.get("content")
+    if c is not None and not isinstance(c, str):
+        return False
+    return True
+
+
 def _append(record: dict) -> None:
     with _lock:
         os.makedirs(_MEM_DIR, exist_ok=True)
@@ -207,7 +237,9 @@ def _append(record: dict) -> None:
 
 
 def _iter_records():
-    """Yield parsed records, skipping unparseable lines (basic robustness)."""
+    """Yield valid records, SAFE-SKIPPING lines that fail JSON parse OR the light
+    schema gate. One-line stderr breadcrumb per skip (no content printed). A bad
+    line never crashes the read or aborts the rest of the load."""
     if not os.path.exists(_MEM_PATH):
         return
     try:
@@ -217,9 +249,14 @@ def _iter_records():
                 if not line:
                     continue
                 try:
-                    yield json.loads(line)
+                    rec = json.loads(line)
                 except Exception:  # noqa: BLE001 — skip malformed line safely
+                    print("[memory] skipped malformed line (json parse error)", file=sys.stderr)
                     continue
+                if not _is_valid_record(rec):
+                    print("[memory] skipped malformed line (schema invalid)", file=sys.stderr)
+                    continue
+                yield rec
     except Exception:  # noqa: BLE001 — never crash on read
         return
 
@@ -235,16 +272,48 @@ def _is_active(rec: dict) -> bool:
 
 
 def _active_approved_facts():
+    """The single ACTIVE-SET function — used by BOTH recall() and the loader so
+    they stay consistent. A fact is active iff: type=="fact", approved, not
+    expired, AND its id is NOT pointed at by any record's supersedes_id (i.e. it
+    was not revoked via an op="revoke" tombstone, nor superseded by a later
+    upsert). Reuses supersedes_id as the target pointer — no new schema fields."""
+    records = list(_iter_records())
+    # Any record (revoke tombstone OR superseding upsert) carrying a supersedes_id
+    # marks that target id inactive.
+    superseded = {r.get("supersedes_id") for r in records if r.get("supersedes_id")}
     out = []
-    for rec in _iter_records():
+    for rec in records:
         if rec.get("type") != "fact":
             continue
         if rec.get("review_status") != "approved":
             continue
         if not _is_active(rec):
             continue
+        if rec.get("id") in superseded:
+            continue  # revoked or superseded
         out.append(rec)
     return out
+
+
+def _rank_active(query):
+    """Deterministic ranking shared by recall() and forget(). Returns a list of
+    (score_tuple, record) for active approved facts with relevance > 0, sorted
+    best-first. score = (exact-tag-match, keyword-overlap, salience, recency)."""
+    q_tokens = _tokens(query)
+    if not q_tokens:
+        return []
+    scored = []
+    for rec in _active_approved_facts():
+        tag_set = {str(t).lower() for t in (rec.get("tags") or [])}
+        tag_match = len(q_tokens & tag_set)
+        kw_overlap = len(q_tokens & _tokens(rec.get("content", "")))
+        if tag_match == 0 and kw_overlap == 0:
+            continue
+        salience = int(rec.get("salience") or 1)
+        recency = rec.get("updated_at") or rec.get("created_at") or ""
+        scored.append(((tag_match, kw_overlap, salience, recency), rec))
+    scored.sort(key=lambda x: x[0], reverse=True)
+    return scored
 
 
 # ---------------------------------------------------------------------------
@@ -258,6 +327,11 @@ def remember_fact(content, tags=None, session_id=None) -> str:
     ok, reason = _validate(content, norm_tags)
     if not ok:
         return reason
+    # Dedupe: if an identical (normalized) active approved fact exists, skip.
+    norm = _normalize_content(content)
+    if norm and any(_normalize_content(r.get("content", "")) == norm
+                    for r in _active_approved_facts()):
+        return "I already have that one, sir."
     try:
         _append(_build_fact_record(content, norm_tags, session_id))
     except Exception:  # noqa: BLE001 — never crash the voice loop
@@ -270,26 +344,73 @@ def recall_facts(query) -> str:
     query = (query or "").strip()
     if not query:
         return "What would you like me to recall, sir?"
-    q_tokens = _tokens(query)
-    facts = _active_approved_facts()
-    scored = []
-    for rec in facts:
-        tag_set = {str(t).lower() for t in (rec.get("tags") or [])}
-        tag_match = len(q_tokens & tag_set)
-        kw_overlap = len(q_tokens & _tokens(rec.get("content", "")))
-        if tag_match == 0 and kw_overlap == 0:
-            continue  # no relevance to this query
-        salience = int(rec.get("salience") or 1)
-        recency = rec.get("updated_at") or rec.get("created_at") or ""
-        scored.append(((tag_match, kw_overlap, salience, recency), rec))
+    scored = _rank_active(query)
     if not scored:
         return "I don't have anything stored about that, sir."
-    scored.sort(key=lambda x: x[0], reverse=True)
     top = [rec.get("content", "") for _, rec in scored[:RECALL_TOP_K]]
     body = "; ".join(c for c in top if c)
     if len(body) > RECALL_MAX_CHARS:
         body = body[:RECALL_MAX_CHARS].rstrip() + "..."
     return f"Here's what I have, sir: {body}."
+
+
+_BULK_FORGET_MARKERS = (
+    "everything", "all of it", "all my memories", "all memories", "all of my",
+    "all my facts", "wipe", "erase all", "forget all", "delete everything",
+    "clear everything", "clear my memory", "forget my memory",
+)
+
+
+def _build_revoke_record(target_id, session_id=None) -> dict:
+    """Build an op='revoke' TOMBSTONE pointing at target_id via supersedes_id.
+    Metadata generated IN CODE. type='revoke' so it is never loaded/recalled as a
+    fact; the original fact line is NOT deleted (reversible/auditable)."""
+    now = _now_iso()
+    return {
+        "schema_version": SCHEMA_VERSION,
+        "id": "mem_" + uuid.uuid4().hex,
+        "op": "revoke",
+        "type": "revoke",
+        "content": "",
+        "tags": [],
+        "salience": 0,
+        "load_at_start": False,
+        "created_at": now,
+        "updated_at": now,
+        "expires_at": None,
+        "supersedes_id": target_id,   # the tombstone's target
+        "review_status": "approved",
+        "source": {"kind": "explicit_user_request", "tool": "forget",
+                   "session_id": session_id},
+    }
+
+
+def forget_fact(query, session_id=None) -> str:
+    """Revoke (tombstone) AT MOST ONE matching fact. Never bulk-deletes; never
+    guesses on ambiguity; reversible (append-only). Returns a short voice string."""
+    query = (query or "").strip()
+    if not query:
+        return ("What would you like me to forget, sir? Please be specific — "
+                "I'll only forget one thing at a time.")
+    low = query.lower()
+    if any(m in low for m in _BULK_FORGET_MARKERS):
+        return ("Could you tell me specifically what to forget, sir? "
+                "I won't clear everything at once.")
+    ranked = _rank_active(query)
+    if not ranked:
+        return "I couldn't find anything about that to forget, sir."
+    # Ambiguity: top two tie on relevance (tag-match AND keyword-overlap) -> ask.
+    if len(ranked) >= 2:
+        (s1, r1), (s2, r2) = ranked[0], ranked[1]
+        if s1[0] == s2[0] and s1[1] == s2[1]:
+            return (f"I found two close matches, sir: \"{r1.get('content', '')}\" "
+                    f"and \"{r2.get('content', '')}\". Which one should I forget?")
+    target = ranked[0][1]
+    try:
+        _append(_build_revoke_record(target.get("id"), session_id))
+    except Exception:  # noqa: BLE001 — never crash the voice loop
+        return "I couldn't update memory just now, sir."
+    return f"I've forgotten that, sir — \"{target.get('content', '')}\"."
 
 
 def load_startup_memory():

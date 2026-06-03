@@ -28,7 +28,7 @@ from ddgs import DDGS
 from elevenlabs.conversational_ai.conversation import ClientTools
 
 from tool_logging import wrap_log
-from memory.store import recall_facts, remember_fact  # Phase 6 persistent memory
+from memory.store import forget_fact, recall_facts, remember_fact  # Phase 6 persistent memory
 
 # ---------------------------------------------------------------------------
 # Safety helpers
@@ -438,6 +438,18 @@ def recall(parameters) -> str:
     return recall_facts(parameters.get("query"))
 
 
+def forget(parameters) -> str:
+    """Forget (revoke) a single stored fact the user no longer wants remembered.
+
+    Required param: query. Finds the single best-matching fact and tombstones it
+    (append-only revoke — reversible, not a hard delete). Acts on AT MOST ONE
+    fact; on ambiguity it names the candidates and asks instead of guessing; on
+    no match it's a polite no-op; it never bulk-forgets. EXPLICIT-ONLY: only call
+    when the user actually asks to forget something.
+    """
+    return forget_fact(parameters.get("query"))
+
+
 # --- delegate_task: launch the SDK loop in a KILLABLE worker process ---------
 # Phase 5 Stage 1 (the safety spine). The autonomous Claude Agent SDK loop runs
 # in a SEPARATE child process (agents/delegate_worker.py), NOT in this voice
@@ -631,6 +643,7 @@ client_tools.register("get_system_info",  wrap_log(get_system_info))
 client_tools.register("delegate_task",    wrap_log(delegate_task))
 client_tools.register("remember",         wrap_log(remember))        # Phase 6
 client_tools.register("recall",           wrap_log(recall))          # Phase 6
+client_tools.register("forget",           wrap_log(forget))          # Phase 6 Stage 2
 
 # Dashboard registration cheat-sheet (add these as Client Tools in ElevenLabs):
 #   open_application — "Open a desktop app the user names."   param: app_name (string)
@@ -642,3 +655,4 @@ client_tools.register("recall",           wrap_log(recall))          # Phase 6
 #   delegate_task    — "Run a complex multi-step task."       param: goal (string)
 #   remember         — "Store a fact the user asks to remember." params: content (string), tags (string, optional). Wait-for-response ENABLED, Response timeout 5s.
 #   recall           — "Recall stored facts about a query."   param: query (string). Wait-for-response ENABLED, Response timeout 5s.
+#   forget           — "Forget a single stored fact."         param: query (string). Wait-for-response ENABLED, Response timeout 5s.
