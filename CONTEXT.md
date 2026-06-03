@@ -62,8 +62,9 @@ Phase 3    ✅ COMPLETE (2026-05-30) — All 5 core tools live-verified
            ✅ search_web, ✅ control_window
 Phase 5    ✅ COMPLETE (2026-06-01) — delegate_task LIVE-VERIFIED end-to-end via voice
            (Stage 1 spine + Stage 2 breakers/telemetry + 110s timeout + concurrency guard).
-           North-star first brick shipped. ← Phase 6 (memory) is NEXT
-Phase 6    ⭐ Persistent memory (remember / recall)
+           North-star first brick shipped.
+Phase 6    ⭐ Persistent memory (remember / recall) — Stage 1 ✅ LIVE-VERIFIED (2026-06-02);
+           Stage 2 (integrity/locking/tombstoning) ← NEXT
 Phase 6.5  ⭐ Self-improvement loop (procedural memory, NOT runtime self-mod)
 Phase 4    Browser control (Playwright/MCP, deferred per north-star reorder)
 Phase 7    Polish (push-to-talk first; wake word deferred)
@@ -342,6 +343,7 @@ current phase*, mirror its essence here.
 
 ## 6. Update history
 
+- **2026-06-02** — **Phase 6 Stage 1 LIVE-VERIFIED via voice.** Two orchestrated sessions proved persistent memory end-to-end across a restart: Session A wrote + recalled facts; Session B (fresh process) answered from the `{{jarvis_memory}}` startup injection with zero tool calls. Stage 1 ✅ COMPLETE; Stage 2 (integrity/locking/tombstoning) next. Detail in PROGRESS.md.
 - **2026-06-02** — **Phase 6 Stage 1 built: persistent local memory (`remember`/`recall` + session-start loader).** New `memory/` package; explicit-only facts in a gitignored append-only JSONL; deterministic recall; session-start loader injects approved facts as DATA via `{{jarvis_memory}}`; reflections defined but quarantined (never auto-load). Added the Phase 6 standing rules to § Explicit scope boundaries (NOT cloud-stored memory bullet). Detail in PROGRESS.md.
 - **2026-06-01** — **⭐ Phase 5 COMPLETE: `delegate_task` live-verified end-to-end via VOICE (test #5).** With the 110s timeout + concurrency guard, a spoken multi-step goal routed to `delegate_task`, the worker ran search_web+save_file under the lockdown, completed in 98s, and saved a real reasoned recommendation file. The concurrency guard fired (busy return) when Rafael spoke mid-run. Marked Phase 5 ✅ in the phase overview; next is Phase 6 (memory). Two non-bug observations worth keeping: speech-to-text can mangle filenames (the agent faithfully saves what it heard); and live mid-run check-ins still interrupt the agent even with headphones (echo gone, impatience isn't) — speak the goal once then stay silent.
 - **2026-06-01** — **Voice test #4: `delegate_task` works end-to-end; only the 60s parent timeout was too short.** After attaching the tool to the agent, routing works (agent routed the multi-step goal to `delegate_task`); a code-side worker run completed the same goal in 93.6s with a real reasoned `notes_apps.md`. Added a standing rule to § `delegate_task` architecture: a real multi-step delegation takes ~90s, so size the timeouts as real(~90s) < parent `_WORKER_TIMEOUT_SEC`(~110–120s) < dashboard Response timeout(~150s). Next build raises those. Detail in PROGRESS.md.
