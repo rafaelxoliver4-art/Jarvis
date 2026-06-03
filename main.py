@@ -16,11 +16,13 @@ import signal
 
 from dotenv import load_dotenv
 from elevenlabs.client import ElevenLabs
-from elevenlabs.conversational_ai.conversation import Conversation
+from elevenlabs.conversational_ai.conversation import Conversation, ConversationInitiationData
 from elevenlabs.conversational_ai.default_audio_interface import DefaultAudioInterface
 
 # Our local capabilities (the "hands"). Defined and registered in tools.py.
 from tools import client_tools
+# Phase 6: load approved facts at session start (injected as DATA, not instructions).
+from memory.store import load_startup_memory
 
 # override=True: an empty ambient ANTHROPIC_API_KEY can shadow the real value in
 # .env, and Phase 5's delegate_task worker authenticates the SDK from the
@@ -38,12 +40,27 @@ def main() -> None:
 
     elevenlabs = ElevenLabs(api_key=ELEVENLABS_API_KEY)
 
+    # Phase 6: load approved facts at session start and inject them as a DATA
+    # dynamic variable (`{{jarvis_memory}}` in the dashboard agent prompt). This
+    # is fail-open — a memory error must NEVER stop the voice loop.
+    try:
+        memory_block, memory_count = load_startup_memory()
+    except Exception as exc:  # noqa: BLE001
+        memory_block, memory_count = "", 0
+        print(f"[memory] startup load failed (non-fatal): {type(exc).__name__}: {exc}")
+    print(f"[memory] loaded {memory_count} approved fact(s) into session context.")
+    init_config = ConversationInitiationData(
+        dynamic_variables={"jarvis_memory": memory_block},
+    )
+
     conversation = Conversation(
         elevenlabs,
         AGENT_ID,
         # Auth is needed only for private agents (i.e. when an API key is set).
         requires_auth=bool(ELEVENLABS_API_KEY),
         audio_interface=DefaultAudioInterface(),
+        # Phase 6: stored memory as a DATA dynamic variable.
+        config=init_config,
         # Our local tools the agent can call:
         client_tools=client_tools,
         # Console callbacks so we can see what's happening:

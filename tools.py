@@ -28,6 +28,7 @@ from ddgs import DDGS
 from elevenlabs.conversational_ai.conversation import ClientTools
 
 from tool_logging import wrap_log
+from memory.store import recall_facts, remember_fact  # Phase 6 persistent memory
 
 # ---------------------------------------------------------------------------
 # Safety helpers
@@ -408,6 +409,35 @@ def get_system_info(parameters) -> str:
     return f"It's {time_str}.{bat_clause} CPU's at {cpu_pct}%, memory at {mem_pct}%, sir."
 
 
+# ---------------------------------------------------------------------------
+# Phase 6 — persistent local memory (explicit-only). Thin wrappers over
+# memory.store; the real logic (schema, validation, ranking, session loader)
+# lives in memory/store.py. These are NOT exposed to the delegate_task worker.
+# ---------------------------------------------------------------------------
+
+def remember(parameters) -> str:
+    """Store a plain fact the user explicitly asked to remember.
+
+    Required param: content (the fact, in the user's words).
+    Optional param: tags (list or comma-separated string) for retrieval.
+
+    Validates + appends to the local memory store. Rejects secrets/credentials
+    and any instruction-/policy-change-like content with a polite refusal.
+    Returns a short voice-friendly confirmation. EXPLICIT-ONLY: only call this
+    when the user actually says "remember ...".
+    """
+    return remember_fact(parameters.get("content"), parameters.get("tags"))
+
+
+def recall(parameters) -> str:
+    """Recall stored facts relevant to a query (deterministic, top few).
+
+    Required param: query. Returns a short bounded voice string, or a polite
+    "nothing stored about that" when there's no match.
+    """
+    return recall_facts(parameters.get("query"))
+
+
 # --- delegate_task: launch the SDK loop in a KILLABLE worker process ---------
 # Phase 5 Stage 1 (the safety spine). The autonomous Claude Agent SDK loop runs
 # in a SEPARATE child process (agents/delegate_worker.py), NOT in this voice
@@ -599,6 +629,8 @@ client_tools.register("search_web",       wrap_log(search_web))
 client_tools.register("control_window",   wrap_log(control_window))
 client_tools.register("get_system_info",  wrap_log(get_system_info))
 client_tools.register("delegate_task",    wrap_log(delegate_task))
+client_tools.register("remember",         wrap_log(remember))        # Phase 6
+client_tools.register("recall",           wrap_log(recall))          # Phase 6
 
 # Dashboard registration cheat-sheet (add these as Client Tools in ElevenLabs):
 #   open_application — "Open a desktop app the user names."   param: app_name (string)
@@ -608,3 +640,5 @@ client_tools.register("delegate_task",    wrap_log(delegate_task))
 #   control_window   — "Focus / minimize / close a window."   params: action (string: focus|minimize|close), app_name (string). Wait-for-response ENABLED + Response timeout 5s.
 #   get_system_info  — "Read out current system status."      params: none (the SDK auto-injects tool_call_id)
 #   delegate_task    — "Run a complex multi-step task."       param: goal (string)
+#   remember         — "Store a fact the user asks to remember." params: content (string), tags (string, optional). Wait-for-response ENABLED, Response timeout 5s.
+#   recall           — "Recall stored facts about a query."   param: query (string). Wait-for-response ENABLED, Response timeout 5s.

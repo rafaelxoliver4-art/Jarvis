@@ -10,6 +10,8 @@ __pycache__/
 # Assistant output and local memory
 generated/*
 !generated/.gitkeep
+# Phase 6 — personal memory NEVER goes to GitHub (track the folder + code, not the data)
+memory/*.jsonl
 memory/*.local
 memory/*.db
 
